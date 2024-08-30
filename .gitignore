@@ -1,0 +1,7 @@
+logs/
+wandb/
+pycache/
+*.pyc
+data/data_splits/
+lcbc.egg-info
+

@@ -1,0 +1,3 @@
+[submodule "FiLM-pytorch"]
+	path = FiLM-pytorch
+	url = https://github.com/caffeinism/FiLM-pytorch.git
