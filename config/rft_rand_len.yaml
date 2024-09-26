@@ -1,5 +1,5 @@
 project_name: rft
-run_name: rft
+run_name: rft-rand-length
 
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
@@ -23,10 +23,11 @@ seed: 0
 # model params
 model: rft
 model_type: rft
-efficientnet_model: efficientnet-b0
 clip_model_type: ViT-B/32
+efficientnet_model: efficientnet-b0
 encoding_size: 128
 lang_encoding_size: 512
+obs_encoder: efficientnet-b0
 mha_num_attention_heads: 4
 mha_num_attention_layers: 4
 mha_ff_dim_factor: 4
@@ -47,20 +48,20 @@ distance:
   min_dist_cat: 0
   max_dist_cat: 40
 action:
-  min_dist_cat: 5
+  min_dist_cat: 3
   max_dist_cat: 40
 
 # action output params
-len_traj_pred: 20
+len_traj_pred: 10
 learn_angle: False
 
 # dataset specific parameters
 image_size: [96, 96] # width, height
 datasets:
-  sacson:
-    data_folder: /hdd/sacson_language_1
-    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson/train/ # path to train folder with traj_names.txt
-    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson/test/ # path to test folder with traj_names.txt
+  sacson_rand_len:
+    data_folder: /hdd/sacson_language_rand_15_25
+    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_rand_len/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_rand_len/test/ # path to test folder with traj_names.txt
     end_slack: 3 # because many trajectories end in collisions
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: True # negative mining from the ViNG paper (Shah et al.)

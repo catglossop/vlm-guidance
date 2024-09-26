@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 from train.visualizing.visualize_utils import numpy_to_img
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
-
+import clip
 
 def visualize_lang_pred(
     batch_obs_images: np.ndarray,
@@ -74,7 +74,10 @@ def visualize_lang_pred(
     if use_wandb:
         wandb.log({f"{eval_type}_lang_alignment": wandb_list}, commit=False)
 
-
+def clip_embed(text, model, device): 
+    text = clip.tokenize(text).to(device)
+    text_features = model.encode_text(text)
+    return text_features
 
 def display_lang_pred(
     imgs: list,

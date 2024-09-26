@@ -104,25 +104,28 @@ def load_config(config_path):
 
 def main(args): 
     config = load_config(args.config)
-    searching = True 
-    possible_imgs = glob.glob(f"{args.image_path}/*/*.jpg", recursive=True)
-    while searching: 
-        current_path = np.random.choice(possible_imgs)
-        print(current_path)
-        current_img = Image.open(current_path)
-        response = input("Use this image? (y/n): ")
-        plt.imshow(current_img)
-        plt.show()
-        idx = int(current_path.split("/")[-1].strip(".jpg"))
-        if response == "y" and idx >= config["context_size"]: 
-            args.prompt_1 = input("Enter prompt 1: ")
-            args.prompt_2 = input("Enter prompt 2: ")
-            searching = False
-        else: 
-            continue
-    args.image_path = ("/").join(current_path.split("/")[:-1])
-    print(args.image_path)
-    args.start_idx = int(current_path.split("/")[-1].strip(".jpg")) - config["context_size"]
+    if args.random_image:
+        searching = True 
+        possible_imgs = glob.glob(f"{args.image_path}/*/*.jpg", recursive=True)
+        while searching: 
+            current_path = np.random.choice(possible_imgs)
+            print(current_path)
+            current_img = Image.open(current_path)
+            response = input("Use this image? (y/n): ")
+            plt.imshow(current_img)
+            plt.show()
+            idx = int(current_path.split("/")[-1].strip(".jpg"))
+            if response == "y" and idx >= config["context_size"]: 
+                args.prompt_1 = input("Enter prompt 1: ")
+                args.prompt_2 = input("Enter prompt 2: ")
+                searching = False
+            else: 
+                continue
+        args.image_path = ("/").join(current_path.split("/")[:-1])
+        print(args.image_path)
+        args.start_idx = int(current_path.split("/")[-1].strip(".jpg")) - config["context_size"]
+    else:
+        args.start_idx = args.image_path.split("/")[-1].strip(".jpg")
 
     
     if config["model_type"] == "rft":
@@ -148,7 +151,10 @@ def main(args):
     prompt_embedding_2 = clip_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
     context_orig = []
     for i in range(args.start_idx, args.start_idx+config["context_size"]+1):
-        context_orig.append(Image.open(os.path.join(args.image_path, str(i)+".jpg")))
+        try:
+            context_orig.append(Image.open(os.path.join(args.image_path, str(i)+".jpg")))
+        except:
+            context_orig.append(Image.open(os.path.join(args.image_path, str(i)+".png")))
     context = transform_images(context_orig, IMAGE_SIZE).to(args.device)  
     viz_img = transform_images(context_orig[-1], VISUALIZATION_IMAGE_SIZE)[0]  
     with torch.no_grad():
@@ -166,6 +172,7 @@ if __name__ == "__main__":
     parser.add_argument("--image_path", type=str, help="path to images")
     parser.add_argument("--start_idx", type=int, help="start index of context")
     parser.add_argument("--config", type=str, help="path to config file")
+    parser.add_argument("--random_image", action="store_true")
     args = parser.parse_args()
     if torch.cuda.is_available():
         device = "cuda"

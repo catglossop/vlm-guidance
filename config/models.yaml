@@ -1,0 +1,14 @@
+rft: 
+  config_path: "../config/rft.yaml"
+  ckpt_path: "model_weights/rft.pth"
+
+rft_rand_len: 
+  config_path: "../config/rft_rand_len.yaml"
+  ckpt_path: "model_weights/rft_rand_len_175.pth"
+
+rft_all: 
+  config_path: "../config/rft_all.yaml"
+  ckpt_path: "model_weights/rft_all_71.pth"
+
+
+# add your own model configs here after saving the *.pth file to ../model_weight
