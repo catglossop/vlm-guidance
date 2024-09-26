@@ -192,7 +192,10 @@ class LCBCDataset(Dataset):
         Sample a goal from the future in the same trajectory.
         Returns: (trajectory_name, goal_time, goal_is_negative)
         """
-        goal_offset = np.random.randint(0, max_goal_dist + 1)
+        goal_offset = np.random.triangular(0, max_goal_dist + 1, max_goal_dist + 1)
+        goal_offset = np.round(goal_offset)
+        if goal_offset > max_goal_dist:
+            goal_offset = max_goal_dist
         if goal_offset == 0:
             trajectory_name, goal_time = self._sample_negative()
             return trajectory_name, goal_time, True
@@ -314,7 +317,6 @@ class LCBCDataset(Dataset):
             context = [(f_curr, t) for t in context_times]
         else:
             raise ValueError(f"Invalid context type {self.context_type}")
-
         obs_image = torch.cat([
             self._load_image(f, t) for f, t in context
         ])

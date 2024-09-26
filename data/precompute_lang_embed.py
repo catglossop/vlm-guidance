@@ -6,8 +6,8 @@ from tqdm import tqdm
 import pickle as pkl
 
 
-input_path = "/hdd/sacson_language_1"
-lang_txt_paths = glob.glob("/hdd/sacson_language_1/*/traj_data.pkl", recursive=True)
+input_path = "/hdd/sacson_language_rand_15_25"
+lang_txt_paths = glob.glob(f"{input_path}/*/traj_data.pkl", recursive=True)
 model_version = "ViT-B/32"
 device = "cuda" if torch.cuda.is_available() else "cpu"
 model, preprocess = clip.load("ViT-B/32", device=device)

@@ -1,5 +1,5 @@
-project_name: rft
-run_name: rft-rand-length
+project_name: lcbc
+run_name: lelan
 
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
@@ -21,10 +21,11 @@ plateau_factor: 0.5
 seed: 0
 
 # model params
-model: rft
-model_type: rft
+model: lnp
+model_type: lnp
+vision_encoder: lnp_clip_film
 efficientnet_model: efficientnet-b0
-encoding_size: 128
+encoding_size: 512
 lang_encoding_size: 512
 obs_encoder: efficientnet-b0
 mha_num_attention_heads: 4
@@ -33,6 +34,12 @@ mha_ff_dim_factor: 4
 vocab_size: 128
 num_tokens: 8
 dropout: 0.5
+attn_unet: False
+cond_predict_scale: False
+down_dims: [64, 128, 256]
+num_diffusion_iters: 100
+linear_output: False
+goal_mask_prob: 0.0
 
 # normalization for the action space
 normalize: True
@@ -44,14 +51,14 @@ alpha: 1e-4
 
 # distance bounds for distance and action and distance predictions 
 distance:
-  min_dist_cat: 0
+  min_dist_cat: 10
   max_dist_cat: 40
 action:
-  min_dist_cat: 3
+  min_dist_cat: 10
   max_dist_cat: 40
 
 # action output params
-len_traj_pred: 10
+len_traj_pred: 16
 learn_angle: False
 
 # dataset specific parameters
@@ -61,6 +68,13 @@ datasets:
     data_folder: /hdd/sacson_language_rand_15_25
     train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_rand_len/train/ # path to train folder with traj_names.txt
     test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_rand_len/test/ # path to test folder with traj_names.txt
+    end_slack: 3 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: True # negative mining from the ViNG paper (Shah et al.)
+  sacson:
+    data_folder: /hdd/sacson_language_1
+    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson/test/ # path to test folder with traj_names.txt
     end_slack: 3 # because many trajectories end in collisions
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: True # negative mining from the ViNG paper (Shah et al.)
@@ -74,3 +88,4 @@ pairwise_test_freq: 0 # in epochs
 eval_fraction: 0.25
 wandb_log_freq: 10 # in iterations
 eval_freq: 1 # in epochs
+save_freq: 1 # in epochs

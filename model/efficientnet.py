@@ -382,7 +382,6 @@ def load_pretrained_weights(model, model_name, weights_path=None, load_fc=True, 
         # assert set(ret.missing_keys) == set(
             # ['_fc.weight', '_fc.bias']), 'Missing keys when loading pretrained weights: {}'.format(ret.missing_keys)
     # doesn't matter if the film projection layers are missing
-    print(ret.missing_keys)
     # assert not ret.unexpected_keys, 'Missing keys when loading pretrained weights: {}'.format(ret.unexpected_keys)
 
     if verbose:

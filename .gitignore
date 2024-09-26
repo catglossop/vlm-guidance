@@ -4,4 +4,5 @@ pycache/
 *.pyc
 data/data_splits/
 lcbc.egg-info
+*.png
 

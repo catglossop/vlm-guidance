@@ -309,6 +309,7 @@ def plot_trajs_and_points(
                 color=traj_colors[i],
                 alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
                 marker="o",
+                markersize=1.0
             )
         else:
             ax.plot(
@@ -318,6 +319,7 @@ def plot_trajs_and_points(
                 label=traj_labels[i],
                 alpha=traj_alphas[i] if traj_alphas is not None else 1.0,
                 marker="o",
+                markersize=1.0
             )
         if traj.shape[1] > 2 and quiver_freq > 0:  # traj data also includes yaw of the robot
             bearings = gen_bearings_from_waypoints(traj)

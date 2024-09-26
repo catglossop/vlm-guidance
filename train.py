@@ -13,15 +13,23 @@ from torch.optim import Adam, AdamW
 from torchvision import transforms
 import torch.backends.cudnn as cudnn
 from warmup_scheduler import GradualWarmupScheduler
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from diffusers.optimization import get_scheduler
 
 
 from model.model import ResNetFiLMTransformer
+from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM
+from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp
+from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 
 
 from data.dataset import LCBCDataset
+from train.training.train_utils import replace_bn_with_gn
 from train.training.train_eval_loop import (
     train_eval_loop,
     load_model,
+    train_eval_loop_lnp,
+    train_eval_loop_lnp_clip,  
 )
 
 
@@ -147,8 +155,63 @@ def main(config):
             config["dropout"],
             device,
         )
+    elif config["model_type"] == "lnp":
+        if config["vision_encoder"] == "lnp":
+            vision_encoder = LNP_comp(
+            obs_encoding_size=config["encoding_size"],
+            lang_encoding_size=config["lang_encoding_size"],
+            context_size=config["context_size"],
+            mha_num_attention_heads=config["mha_num_attention_heads"],
+            mha_num_attention_layers=config["mha_num_attention_layers"],
+            mha_ff_dim_factor=config["mha_ff_dim_factor"],
+            )
+            vision_encoder = replace_bn_with_gn(vision_encoder)  
+        elif config["vision_encoder"] == "lnp_clip_film":
+            vision_encoder = LNP_clip_FiLM(
+                obs_encoder=config["obs_encoder"],
+                obs_encoding_size=config["lang_encoding_size"],
+                context_size=config["context_size"],
+                mha_num_attention_heads=config["mha_num_attention_heads"],
+                mha_num_attention_layers=config["mha_num_attention_layers"],
+                mha_ff_dim_factor=config["mha_ff_dim_factor"],
+                )
+            vision_encoder = replace_bn_with_gn(vision_encoder)
     else:
         raise ValueError(f"Model {config['model_type']} not supported")
+    if config["model_type"] == "lnp":
+        noise_scheduler = DDPMScheduler(
+                num_train_timesteps=config["num_diffusion_iters"],
+                beta_schedule='squaredcos_cap_v2',
+                clip_sample=True,
+                prediction_type='epsilon'
+            )
+        noise_pred_net = ConditionalUnet1D(
+                input_dim=2,
+                global_cond_dim=config["encoding_size"]*(config["context_size"]+1),
+                down_dims=config["down_dims"],
+                cond_predict_scale=config["cond_predict_scale"],
+            )
+        dist_pred_network = DenseNetwork_lnp(embedding_dim=config["encoding_size"]*(config["context_size"]+1), control_horizon=config["len_traj_pred"])
+                
+    if config["vision_encoder"] == "lnp":   
+        model = LNP(
+            vision_encoder=vision_encoder,
+            noise_pred_net=noise_pred_net,
+            dist_pred_net=dist_pred_network,
+        )
+    elif config["vision_encoder"] == "lnp_clip":
+        model = LNP_clip(
+            vision_encoder=vision_encoder,
+            noise_pred_net=noise_pred_net,
+            dist_pred_net=dist_pred_network,
+        )    
+
+    elif config["vision_encoder"] == "lnp_clip_film":
+        model = LNP_clip(
+            vision_encoder=vision_encoder,
+            noise_pred_net=noise_pred_net,
+            dist_pred_net=dist_pred_network,
+        )     
 
     if config["clipping"]:
         print("Clipping gradients to", config["max_norm"])
@@ -252,6 +315,58 @@ def main(config):
             use_wandb=config["use_wandb"],
             eval_fraction=config["eval_fraction"],
         )
+    elif config["model_type"] == "lnp":
+        train_eval_loop_lnp(
+            train_model=config["train"],
+            model=model,
+            optimizer=optimizer,
+            lr_scheduler=scheduler,
+            noise_scheduler=noise_scheduler,
+            train_loader=train_loader,
+            test_dataloaders=test_dataloaders,
+            transform=transform,
+            goal_mask_prob=config["goal_mask_prob"],
+            epochs=config["epochs"],
+            device=device,
+            project_folder=config["project_folder"],
+            print_log_freq=config["print_log_freq"],
+            wandb_log_freq=config["wandb_log_freq"],
+            image_log_freq=config["image_log_freq"],
+            num_images_log=config["num_images_log"],
+            current_epoch=current_epoch,
+            alpha=float(config["alpha"]),
+            use_wandb=config["use_wandb"],
+            eval_fraction=config["eval_fraction"],
+            eval_freq=config["eval_freq"],
+            save_freq=config["save_freq"],
+            linear_output=config["linear_output"],
+        )
+    elif config["model_type"] == "lnp_clip":
+        train_eval_loop_lnp_clip(
+            train_model=config["train"],
+            model=model,
+            optimizer=optimizer,
+            lr_scheduler=scheduler,
+            noise_scheduler=noise_scheduler,
+            train_loader=train_loader,
+            test_dataloaders=test_dataloaders,
+            transform=transform,
+            goal_mask_prob=config["goal_mask_prob"],
+            epochs=config["epochs"],
+            device=device,
+            project_folder=config["project_folder"],
+            print_log_freq=config["print_log_freq"],
+            wandb_log_freq=config["wandb_log_freq"],
+            image_log_freq=config["image_log_freq"],
+            num_images_log=config["num_images_log"],
+            current_epoch=current_epoch,
+            alpha=float(config["alpha"]),
+            use_wandb=config["use_wandb"],
+            eval_fraction=config["eval_fraction"],
+            eval_freq=config["eval_freq"],
+            save_freq=config["save_freq"],
+            linear_output=config["linear_output"],
+        ) 
     else:
         raise ValueError(f"Model {config['model']} not supported")
     print("FINISHED TRAINING")
