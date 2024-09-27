@@ -210,25 +210,24 @@ class LNP_clip_FiLM(nn.Module):
         """
         super().__init__()
         self.obs_encoding_size = obs_encoding_size
-        self.goal_encoding_size = obs_encoding_size
+        self.goal_encoding_size = obs_encoding_size//4
         self.context_size = context_size
 
         self.film_model = make_model(8, 10, 128)
         self.num_goal_features = 1024
-
-        self.clip_model, preprocess = clip.load("ViT-B/32")
         
         if self.num_goal_features != self.goal_encoding_size:
             self.compress_goal_enc = nn.Linear(self.num_goal_features, self.goal_encoding_size) #clip feature
         else:
             self.compress_goal_enc = nn.Identity()
+        
 
         # Initialize positional encoding and self-attention layers
-        self.positional_encoding = PositionalEncoding(self.obs_encoding_size, max_seq_len=2) #no context
+        self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=2) #no context
         self.sa_layer = nn.TransformerEncoderLayer(
-            d_model=self.obs_encoding_size, 
+            d_model=self.goal_encoding_size, 
             nhead=mha_num_attention_heads, 
-            dim_feedforward=mha_ff_dim_factor*self.obs_encoding_size, 
+            dim_feedforward=mha_ff_dim_factor*self.goal_encoding_size, 
             activation="gelu", 
             batch_first=True, 
             norm_first=True
@@ -244,28 +243,21 @@ class LNP_clip_FiLM(nn.Module):
 
     def forward(self, obs_img: torch.tensor, feat_text: torch.tensor):#inst_ref: torch.tensor
 
-        device = obs_img.device
-        # Initialize the goal encoding
-        goal_encoding = torch.zeros((obs_img.size()[0], 1, self.goal_encoding_size)).to(device)
         obsgoal_img = obs_img
         
         inst_encoding = feat_text
         obsgoal_encoding = self.film_model(obsgoal_img, inst_encoding)
         obsgoal_encoding_cat = obsgoal_encoding.flatten(start_dim=1)
         obsgoal_encoding = self.compress_goal_enc(obsgoal_encoding_cat)        
-
         if len(obsgoal_encoding.shape) == 2:
             obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size
         obs_encoding = obsgoal_encoding                
-        
         # Apply positional encoding 
         if self.positional_encoding:
             obs_encoding = self.positional_encoding(obs_encoding)
-        
         obs_encoding_tokens = self.sa_encoder(obs_encoding)
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
-
         return obs_encoding_tokens
 
 # Utils for Group Norm

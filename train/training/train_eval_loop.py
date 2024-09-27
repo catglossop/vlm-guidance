@@ -61,6 +61,9 @@ def train_eval_loop(
         use_wandb: whether to log to wandb or not
         eval_fraction: fraction of training data to use for evaluation
     """
+    num_params = count_parameters(model)
+    print("Number of parameters:", num_params)
+
     assert 0 <= float(alpha) <= 1
     latest_path = os.path.join(project_folder, f"latest.pth")
 
@@ -193,6 +196,9 @@ def train_eval_loop_lnp(
     """
     latest_path = os.path.join(project_folder, f"latest.pth")
     ema_model = EMAModel(model=model,power=0.75)
+
+    num_params = count_parameters(model)
+    print("Number of parameters:", num_params)
     
     for epoch in range(current_epoch, current_epoch + epochs):
         if train_model:
@@ -452,6 +458,6 @@ def count_parameters(model):
         params = parameter.numel()
         table.add_row([name, params])
         total_params+=params
-    # print(table)
+    print(table)
     print(f"Total Trainable Params: {total_params/1e6:.2f}M")
     return total_params

@@ -5,4 +5,6 @@ pycache/
 data/data_splits/
 lcbc.egg-info
 *.png
+*.jpg
+data/data_annotation/relabelling/
 

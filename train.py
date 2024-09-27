@@ -169,7 +169,7 @@ def main(config):
         elif config["vision_encoder"] == "lnp_clip_film":
             vision_encoder = LNP_clip_FiLM(
                 obs_encoder=config["obs_encoder"],
-                obs_encoding_size=config["lang_encoding_size"],
+                obs_encoding_size=config["obs_encoding_size"],
                 context_size=config["context_size"],
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
@@ -187,7 +187,7 @@ def main(config):
             )
         noise_pred_net = ConditionalUnet1D(
                 input_dim=2,
-                global_cond_dim=config["encoding_size"]*(config["context_size"]+1),
+                global_cond_dim=config["encoding_size"]//2*(config["context_size"]+1),
                 down_dims=config["down_dims"],
                 cond_predict_scale=config["cond_predict_scale"],
             )
@@ -292,7 +292,7 @@ def main(config):
             optimizer.load_state_dict(latest_checkpoint["optimizer"].state_dict())
         if scheduler is not None and "scheduler" in latest_checkpoint:
             scheduler.load_state_dict(latest_checkpoint["scheduler"].state_dict())
-
+    
     if config["model_type"] == "rft": 
         train_eval_loop(
             train_model=config["train"],

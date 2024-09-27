@@ -888,7 +888,6 @@ def model_output_diffusion(
     noisy_diffusion_output = torch.randn(
         (batch_size, pred_horizon, action_dim), device=device)
     diffusion_output = noisy_diffusion_output
-
     for k in noise_scheduler.timesteps[:]:
         # predict noise
         noise_pred = model(
