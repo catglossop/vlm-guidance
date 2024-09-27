@@ -1,0 +1,12 @@
+front:
+  ros__parameters:
+    video_device: "/dev/video0"
+    image_width: 640
+    image_height: 480
+    pixel_format: "yuyv"
+    io_method: "mmap"
+    image_transport: "compressed"
+    compressed:
+      format: "jpeg"
+      jpeg_quality: 80
+      color_format: "rgb8"

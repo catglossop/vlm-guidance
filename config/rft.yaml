@@ -24,9 +24,9 @@ seed: 0
 model: rft
 model_type: rft
 efficientnet_model: efficientnet-b0
+clip_model_type: ViT-B/32
 encoding_size: 128
 lang_encoding_size: 512
-obs_encoder: efficientnet-b0
 mha_num_attention_heads: 4
 mha_num_attention_layers: 4
 mha_ff_dim_factor: 4

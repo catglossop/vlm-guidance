@@ -23,6 +23,7 @@ seed: 0
 # model params
 model: lnp
 model_type: lnp
+clip_model_type: ViT-B/32
 vision_encoder: lnp_clip_film
 efficientnet_model: efficientnet-b0
 encoding_size: 512

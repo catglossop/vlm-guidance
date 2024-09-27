@@ -124,28 +124,30 @@ def model_output_lnp(model, noise_scheduler, context, prompt_embedding, pred_hor
 def main(args): 
     config = load_config(args.config)
     if args.random_image:
-        searching = True 
-        possible_imgs = glob.glob(f"{args.image_path}/*/*.jpg", recursive=True)
-        while searching: 
-            current_path = np.random.choice(possible_imgs)
-            print(current_path)
-            current_img = Image.open(current_path)
-            response = input("Use this image? (y/n): ")
-            plt.imshow(current_img)
-            plt.show()
-            idx = int(current_path.split("/")[-1].strip(".jpg"))
-            if response == "y" and idx >= config["context_size"]: 
-                args.prompt_1 = input("Enter prompt 1: ")
-                args.prompt_2 = input("Enter prompt 2: ")
-                searching = False
-            else: 
-                continue
-        args.image_path = ("/").join(current_path.split("/")[:-1])
-        print(args.image_path)
-        args.start_idx = int(current_path.split("/")[-1].strip(".jpg")) - config["context_size"]
+        if args.random_image:
+            searching = True 
+            possible_imgs = glob.glob(f"{args.image_path}/*/*.jpg", recursive=True)
+            while searching: 
+                current_path = np.random.choice(possible_imgs)
+                print(current_path)
+                current_img = Image.open(current_path)
+                response = input("Use this image? (y/n): ")
+                plt.imshow(current_img)
+                plt.show()
+                idx = int(current_path.split("/")[-1].strip(".jpg"))
+                if response == "y" and idx >= config["context_size"]: 
+                    args.prompt_1 = input("Enter prompt 1: ")
+                    args.prompt_2 = input("Enter prompt 2: ")
+                    searching = False
+                else: 
+                    continue
+            args.image_path = ("/").join(current_path.split("/")[:-1])
+            print(args.image_path)
+            args.start_idx = int(current_path.split("/")[-1].strip(".jpg")) - config["context_size"]
     else:
         print(args.image_path)
         args.start_idx = 0
+
 
     if config["model_type"] == "rft":
         model = ResNetFiLMTransformer(
@@ -225,9 +227,6 @@ if __name__ == "__main__":
     parser.add_argument("--image_path", type=str, help="path to images")
     parser.add_argument("--start_idx", type=int, help="start index of context")
     parser.add_argument("--config", type=str, help="path to config file")
-    parser.add_argument("--random_image", action="store_true", help="randomly select image")
-    parser.add_argument("--linear_output", action="store_true", help="use linear output")
-    parser.add_argument("--num_samples", type=int, help="number of samples")
     args = parser.parse_args()
     device = "cuda:1" if torch.cuda.is_available() else None
     args.device = device

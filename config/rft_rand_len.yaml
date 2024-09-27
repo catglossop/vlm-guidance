@@ -23,7 +23,9 @@ seed: 0
 # model params
 model: rft
 model_type: rft
+clip_model_type: ViT-B/32
 efficientnet_model: efficientnet-b0
+vision_encoder: None
 encoding_size: 128
 lang_encoding_size: 512
 obs_encoder: efficientnet-b0

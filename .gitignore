@@ -4,6 +4,8 @@ pycache/
 *.pyc
 data/data_splits/
 lcbc.egg-info
+deployment/model_weights/
+*.jpg
 *.png
 *.jpg
 data/data_annotation/relabelling/

@@ -23,6 +23,7 @@ seed: 0
 # model params
 model: rft
 model_type: rft
+clip_model_type: ViT-B/32
 vision_encoder: None
 efficientnet_model: efficientnet-b0
 encoding_size: 128
@@ -52,7 +53,7 @@ action:
   max_dist_cat: 40
 
 # action output params
-len_traj_pred: 15
+len_traj_pred: 20
 learn_angle: False
 
 # dataset specific parameters
