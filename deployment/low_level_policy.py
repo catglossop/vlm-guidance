@@ -24,6 +24,7 @@ from cv_bridge import CvBridge
 
 # UTILS
 from model.model import ResNetFiLMTransformer
+from train.training.train_utils import model_output_diffusion_eval
 from train.visualizing.action_utils import plot_trajs_and_points, plot_trajs_and_points_on_image
 from train.visualizing.visualize_utils import (
     to_numpy,
@@ -57,21 +58,23 @@ class LowLevelPolicy(Node):
         self.args = args
         self.context_queue = []
         self.context_size = 5
-
-        self.language_prompt = "Move towards the end of the hallway"
-
+        self.num_samples = args.num_samples
+        
+        self.language_prompt = "Move away from the trash bin in the first room"
 
         # Load the config
         self.load_config(ROBOT_CONFIG_PATH)
 
         # Load the model 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.model_type = args.model_type
         print("Using device:", self.device)
         self.load_model_from_config(MODEL_CONFIG_PATH, args.model_type)
         self.clip_model_type = self.model_params["clip_model_type"]
         self.clip_model, self.preprocess = clip.load(self.clip_model_type, device=self.device)
         self.clip_language_embedding =  clip.tokenize(self.language_prompt).to(self.device)
         self.clip_language_embedding = self.clip_model.encode_text(self.clip_language_embedding).to(torch.float)
+ 
 
         # Load data config
         self.load_data_config()
@@ -147,11 +150,9 @@ class LowLevelPolicy(Node):
         return torch.cat(transf_imgs, dim=1)
 
     def compare_output(self):
-        print("saving viz")
         dataset_name = "sacson"
         traj_1 = self.naction
         prompt_1 = self.language_prompt
-        print(self.context_queue[-1].size)
         viz_img = self.transform_images_viz(self.context_queue[-1], IMAGE_SIZE) 
         fig, ax = plt.subplots(1, 2)
         if len(traj_1.shape) > 2:
@@ -179,8 +180,8 @@ class LowLevelPolicy(Node):
         )
         ax[0].legend([prompt_1])
         ax[1].legend([prompt_1])
-        ax[0].set_ylim((-50, 100))
-        ax[0].set_xlim((-5, 100))
+        ax[0].set_ylim((-5, 5))
+        ax[0].set_xlim((-5, 15))
         plt.savefig("visualize.png")
 
     def load_config(self, robot_config_path):
@@ -209,13 +210,19 @@ class LowLevelPolicy(Node):
             print(f"Loading model from {self.ckpth_path}")
         else:
             raise FileNotFoundError(f"Model weights not found at {self.ckpth_path}")
+        if self.model_type == "lelan": 
+            self.noise_scheduler = DDPMScheduler(
+                    num_train_timesteps=self.model_params["num_diffusion_iters"],
+                    beta_schedule='squaredcos_cap_v2',
+                    clip_sample=True,
+                    prediction_type='epsilon'
+                )
         self.model = load_model(
             self.ckpth_path,
             self.model_params,
             self.device
         )
         self.model.eval()
-
     
     def load_data_config(self):
         # LOAD DATA CONFIG
@@ -248,21 +255,29 @@ class LowLevelPolicy(Node):
         self.mask = torch.zeros(1).long().to(self.device)  
     
     def infer_actions(self):
-        # Get early fusion obs goal for conditioning
-        self.naction = self.model(self.obs_images.clone(), self.clip_language_embedding.clone())
-        self.naction = np.array(self.get_action().detach().cpu().numpy())
-        self.sampled_actions_msg = Float32MultiArray()
-        self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.naction.flatten())).tolist()
-        print("Sampled actions shape: ", self.naction.shape)
-        self.sampled_actions_pub.publish(self.sampled_actions_msg)
-        self.naction = self.naction[0] 
-        self.chosen_waypoint = self.naction[self.args.waypoint] 
+        if self.model_type == "rft":
+            # Get early fusion obs goal for conditioning
+            self.naction = self.model(self.obs_images.clone(), self.clip_language_embedding.clone())
+            self.naction = np.array(self.get_action().detach().cpu().numpy())
+            self.sampled_actions_msg = Float32MultiArray()
+            self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.naction.flatten())).tolist()
+            print("Sampled actions shape: ", self.naction.shape)
+            self.sampled_actions_pub.publish(self.sampled_actions_msg)
+            self.naction = self.naction[0] 
+            self.chosen_waypoint = self.naction[self.args.waypoint] 
+        elif self.model_type == "lelan":
+            context = self.obs_images.reshape((-1, 3, 96, 96))
+            self.naction = model_output_diffusion_eval(self.model, self.noise_scheduler, context.clone(), self.clip_language_embedding.clone(), self.model_params["len_traj_pred"], 2, self.num_samples, 1, self.device)["actions"].detach().cpu().numpy()
+            self.sampled_actions_msg = Float32MultiArray()
+            self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.naction.flatten())).tolist()
+            print("Sampled actions shape: ", self.naction.shape)
+            self.sampled_actions_pub.publish(self.sampled_actions_msg)
+            self.naction = self.naction[0] 
+            self.chosen_waypoint = self.naction[self.args.waypoint] 
 
     def timer_callback(self):
 
         self.chosen_waypoint = np.zeros(4, dtype=np.float32)
-        print(len(self.context_queue))
-        print(self.context_size)
         if len(self.context_queue) > self.context_size:
 
             # Process observations
@@ -299,7 +314,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--waypoint",
         "-w",
-        default=3, # close waypoints exihibit straight line motion (the middle waypoint is a good default)
+        default=2, # close waypoints exihibit straight line motion (the middle waypoint is a good default)
         type=int,
         help=f"""index of the waypoint used for navigation (between 0 and 4 or 
         how many waypoints your model predicts) (default: 2)""",
@@ -311,7 +326,7 @@ if __name__ == "__main__":
         type=str,
         help="path to topomap images",
     )
-    parser.add_argument(        "--num-samples",
+    parser.add_argument("--num-samples",
         "-n",
         default=1,
         type=int,
@@ -320,7 +335,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model-type",
         "-m", 
-        default=1, 
+        default="rft", 
         type=str,
         help="Model type to use",
     )

@@ -75,9 +75,11 @@ class Transformer(nn.Module):
         self.l2 = nn.Linear(self.context_length, d_model, bias=False) # positional encoding layer
         self.lout = nn.Linear(d_model*self.context_length, seqlen*action_dim, bias=False)
 
-    def forward(self, x, attn_mask=None):
+    def forward(self, x, cond, attn_mask=None):
         bs = x.size(0)//self.context_length
         x = x.reshape(bs, self.context_length, -1)
+        cond = cond.unsqueeze(1).tile(1, self.context_length, 1)
+        x = torch.cat((x, cond), dim=-1)
         pos = torch.arange(self.context_length).unsqueeze(0)
         pos = pos.tile(bs, 1).to(self.device)
         pos = F.one_hot(pos, num_classes=self.context_length).float()
@@ -115,10 +117,9 @@ class ImageTokenizer(nn.Module):
         context_size = context_size//3
         # img = img.resize(bs, context_size, 224, 224, 3)
         img = torch.reshape(img, (bs*context_size, 96, 96, 3))
-        img -= torch.tensor(torch.tensor(MEAN_RGB), device=self.device)
-        img /= torch.tensor(torch.tensor(STDDEV_RGB), device=self.device)
-        img = img.permute(0, 3, 1, 2)
-
+        img_1 = img - torch.tensor(MEAN_RGB, device=self.device)
+        img_2 = img_1 / torch.tensor(STDDEV_RGB, device=self.device)
+        img = img_2.permute(0, 3, 1, 2)
         x = self.efficientnet.extract_features(img, context)
         x = self.conv(x)
         #check here what size x is
@@ -133,7 +134,7 @@ class ResNetFiLMTransformer(nn.Module):
 
         self.device = device
         input_dim = 11520
-        self.transformer = Transformer(input_dim, obs_encoding_size, obs_encoding_size, num_layers, num_heads, obs_encoding_size, dropout, device, action_dim=action_dim, seqlen=len_pred_traj, context_length=context_size)
+        self.transformer = Transformer(input_dim + lang_encoding_size, obs_encoding_size, obs_encoding_size, num_layers, num_heads, obs_encoding_size, dropout, device, action_dim=action_dim, seqlen=len_pred_traj, context_length=context_size)
         self.image_tokenizer = ImageTokenizer(model_name, lang_encoding_size, num_tokens, device=self.device)
         self.context_size = context_size
         self.len_pred_traj = len_pred_traj
@@ -149,7 +150,7 @@ class ResNetFiLMTransformer(nn.Module):
         else:
             context_image_tokens = obs_tokens
 
-        xout = self.transformer(context_image_tokens) 
+        xout = self.transformer(context_image_tokens, lang_embed) 
         return xout 
     
 

@@ -1,5 +1,5 @@
-project_name: rft
-run_name: rft-rand-length
+project_name: lcbc
+run_name: lelan
 
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
@@ -21,12 +21,12 @@ plateau_factor: 0.5
 seed: 0
 
 # model params
-model: rft
-model_type: rft
+model: lnp
+model_type: lnp
 clip_model_type: ViT-B/32
-vision_encoder: None
+vision_encoder: lnp_clip_film
 efficientnet_model: efficientnet-b0
-encoding_size: 128
+encoding_size: 512
 lang_encoding_size: 512
 obs_encoder: efficientnet-b0
 mha_num_attention_heads: 4
@@ -35,6 +35,12 @@ mha_ff_dim_factor: 4
 vocab_size: 128
 num_tokens: 8
 dropout: 0.5
+attn_unet: False
+cond_predict_scale: False
+down_dims: [64, 128, 256]
+num_diffusion_iters: 100
+linear_output: False
+goal_mask_prob: 0.0
 
 # normalization for the action space
 normalize: True
@@ -53,7 +59,7 @@ action:
   max_dist_cat: 40
 
 # action output params
-len_traj_pred: 20
+len_traj_pred: 16
 learn_angle: False
 
 # dataset specific parameters
@@ -83,3 +89,4 @@ pairwise_test_freq: 0 # in epochs
 eval_fraction: 0.25
 wandb_log_freq: 10 # in iterations
 eval_freq: 1 # in epochs
+save_freq: 1 # in epochs

@@ -52,7 +52,7 @@ class PDController(Node):
         self.MAX_W = robot_config["max_w"]
         self.VEL_TOPIC = CMD_VEL_TOPIC # CHANGE BACK --> robot_config["vel_navi_topic"]
         self.DT = 1/robot_config["frame_rate"]
-        self.RATE = 4
+        self.RATE = robot_config["frame_rate"]
         self.EPS = 1e-8
         self.WAYPOINT_TIMEOUT = 1 # seconds # TODO: tune this
 

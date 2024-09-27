@@ -27,7 +27,7 @@ tmux send-keys "python low_level_policy.py $@" Enter
 # Run the pd_controller.py script in the fourth pane
 tmux select-pane -t 2
 tmux send-keys "conda activate hi_learn" Enter
-# tmux send-keys "python pd_controller.py" Enter
+tmux send-keys "python pd_controller.py" Enter
 
 # Run the pd_controller.py script in the fourth pane
 tmux select-pane -t 3

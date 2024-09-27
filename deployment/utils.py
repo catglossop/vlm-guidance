@@ -16,9 +16,15 @@ import torchvision.transforms.functional as TF
 import numpy as np
 from PIL import Image as PILImage
 from typing import List, Tuple, Dict, Optional
+from prettytable import PrettyTable 
 
 # models
 from model.model import ResNetFiLMTransformer
+from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM
+from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp
+from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
+from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+from train.training.train_utils import replace_bn_with_gn, model_output_diffusion_eval
 from data.data_utils import IMAGE_ASPECT_RATIO
 
 
@@ -43,21 +49,67 @@ def load_model(
             config["dropout"],
             device,
         )
+        checkpoint = torch.load(model_path, map_location=device)
+    elif model_type == "lnp":
+        if config["vision_encoder"] == "lnp_clip_film":
+            vision_encoder = LNP_clip_FiLM(
+                obs_encoder=config["obs_encoder"],
+                obs_encoding_size=config["lang_encoding_size"],
+                context_size=config["context_size"],
+                mha_num_attention_heads=config["mha_num_attention_heads"],
+                mha_num_attention_layers=config["mha_num_attention_layers"],
+                mha_ff_dim_factor=config["mha_ff_dim_factor"],
+                )
+            vision_encoder = replace_bn_with_gn(vision_encoder)
+        noise_scheduler = DDPMScheduler(
+                num_train_timesteps=config["num_diffusion_iters"],
+                beta_schedule='squaredcos_cap_v2',
+                clip_sample=True,
+                prediction_type='epsilon'
+            )
+        noise_pred_net = ConditionalUnet1D(
+                input_dim=2,
+                global_cond_dim=config["encoding_size"]*(config["context_size"]+1),
+                down_dims=config["down_dims"],
+                cond_predict_scale=config["cond_predict_scale"],
+            )
+        dist_pred_network = DenseNetwork_lnp(embedding_dim=config["encoding_size"]*(config["context_size"]+1), control_horizon=config["len_traj_pred"])
+        model = LNP_clip(
+            vision_encoder=vision_encoder,
+            noise_pred_net=noise_pred_net,
+            dist_pred_net=dist_pred_network,
+        )
+        checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(0))  
+
+    if model_type == "lnp":
+        state_dict = checkpoint
+        model.load_state_dict(state_dict, strict=False)
     else:
-        print("Error: model type not supported")
+        loaded_model = checkpoint["model"]
+        try:
+            state_dict = loaded_model.module.state_dict()
+            model.load_state_dict(state_dict, strict=False)
+        except AttributeError as e:
+            state_dict = loaded_model.state_dict()
+            model.load_state_dict(state_dict, strict=False)
     
-    checkpoint = torch.load(model_path, map_location=device)
-    loaded_model = checkpoint["model"]
-    try:
-        state_dict = loaded_model.module.state_dict()
-        model.load_state_dict(state_dict, strict=False)
-    except AttributeError as e:
-        state_dict = loaded_model.state_dict()
-        model.load_state_dict(state_dict, strict=False)
+    num_params = count_parameters(model)
+    print("Number of parameters: ",num_params)
 
-    model.to(device)
-    return model
+            
+    return model.to(device)
 
+def count_parameters(model):
+    table = PrettyTable(["Modules", "Parameters"])
+    total_params = 0
+    for name, parameter in model.named_parameters():
+        if not parameter.requires_grad: continue
+        params = parameter.numel()
+        table.add_row([name, params])
+        total_params+=params
+    # print(table)
+    print(f"Total Trainable Params: {total_params/1e6:.2f}M")
+    return total_params
 
 # def msg_to_pil(msg: Image) -> PILImage.Image:
 #     img = np.frombuffer(msg.data, dtype=np.uint8).reshape(
