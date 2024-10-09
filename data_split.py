@@ -22,7 +22,7 @@ def main(args: argparse.Namespace):
         f
         for f in os.listdir(args.data_dir)
         if os.path.isdir(os.path.join(args.data_dir, f))
-        and "traj_data.pkl" in os.listdir(os.path.join(args.data_dir, f))
+        and "traj_data_w_embed.pkl" in os.listdir(os.path.join(args.data_dir, f))
     ]
 
     # Randomly shuffle the names of the folders

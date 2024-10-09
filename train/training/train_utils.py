@@ -496,7 +496,6 @@ def train_lnp(
                 dataset_index,
                 action_mask,
             ) = data
-            
             obs_images = torch.split(obs_image, 3, dim=1)
             viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
             viz_goal_image = TF.resize(goal_image, VISUALIZATION_IMAGE_SIZE)

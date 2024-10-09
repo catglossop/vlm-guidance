@@ -66,6 +66,9 @@ sacson:
 sacson_rand_len:
   metric_waypoint_spacing: 0.255
 
+sacson_v2:
+  metric_waypoint_spacing: 0.255
+
 frodo_dataset:
   metric_waypoint_spacing: 0.6
 

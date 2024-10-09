@@ -8,7 +8,7 @@ import pdb
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader, ConcatDataset, WeightedRandomSampler
 from torch.optim import Adam, AdamW
 from torchvision import transforms
 import torch.backends.cudnn as cudnn
@@ -68,6 +68,7 @@ def main(config):
 
     # Load the data
     train_dataset = []
+    train_dataset_lengths = []
     test_dataloaders = {}
 
     if "context_type" not in config:
@@ -75,6 +76,16 @@ def main(config):
 
     if "clip_goals" not in config:
         config["clip_goals"] = False
+    
+    # Re-calibrate the weights on each of the datasets
+    weights = []
+    for dataset_name in config["datasets"]:
+        data_config = config["datasets"][dataset_name]
+        if "weight" not in data_config:
+            data_config["weight"] = 1
+        weights.append(data_config["weight"])
+    total_weight = sum(weights)
+    train_dataset_weights = [w / total_weight for w in weights]
 
     for dataset_name in config["datasets"]:
         data_config = config["datasets"][dataset_name]
@@ -111,6 +122,7 @@ def main(config):
                     )
                     if data_split_type == "train":
                         train_dataset.append(dataset)
+                        train_dataset_lengths.append(len(dataset))
                     else:
                         dataset_type = f"{dataset_name}_{data_split_type}"
                         if dataset_type not in test_dataloaders:
@@ -119,11 +131,13 @@ def main(config):
 
     # combine all the datasets from different robots
     train_dataset = ConcatDataset(train_dataset)
+    data_dist = np.concatenate([[train_dataset_weights[i]]*train_dataset_lengths[i] for i in range(len(train_dataset_lengths))])
+    sampler = WeightedRandomSampler(data_dist, len(train_dataset), replacement=True)
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
-        shuffle=True,
+        sampler = sampler,
         num_workers=config["num_workers"],
         drop_last=False,
         persistent_workers=True,

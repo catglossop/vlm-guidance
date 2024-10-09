@@ -9,4 +9,5 @@ deployment/model_weights/
 *.png
 *.jpg
 data/data_annotation/relabelling/
+data/data_annotation/relabelling*/
 

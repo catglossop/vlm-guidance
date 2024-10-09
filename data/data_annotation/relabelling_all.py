@@ -69,7 +69,6 @@ def draw_trajectory(path, start, end):
     traj_pixels = get_pos_pixels(
         xy_coords, camera_height, camera_x_offset, camera_matrix, dist_coeffs, clip=False
     )
-    print(traj_pixels)
     if len(traj_pixels.shape) == 2:
         ax.plot(
             traj_pixels[:250, 0],
@@ -198,7 +197,6 @@ def relabel_traj_gpt(images_64, prompt, client, in_context_images_64=None, in_co
             })
     for i, p in enumerate(prompt.keys()):
         context = []
-        print("Prompt key: ", p)
         if actions is not None and i == 0:
             context.append(prompt[p] + (np.array_str(actions)))   
             context_no_images.append(prompt[p] + (np.array_str(actions)))  
@@ -225,7 +223,7 @@ def relabel_traj_gpt(images_64, prompt, client, in_context_images_64=None, in_co
     label = response.choices[0].message.content
     return label, context_no_images
 
-def relabel_traj_gpt_hierarchical(images_64, prompt, client, in_context_images_64=None, in_context_text=None, model_name="gpt-4o", actions=None):
+def relabel_traj_gpt_hierarchical(images_64, prompt, client, in_context_images_64=None, in_context_text=None, model_name="gpt-4o", actions=None, debug=False):
     message_history = []
     context_no_images = []
     image_descriptions = []
@@ -243,7 +241,8 @@ def relabel_traj_gpt_hierarchical(images_64, prompt, client, in_context_images_6
 
     for i, p in enumerate(prompt.keys()):
         context = []
-        print("Prompt key: ", p)
+        if debug:
+            print("Prompt key: ", p)
         if i == 0:  
             context_no_images.append(prompt[p])
 
@@ -274,7 +273,8 @@ def relabel_traj_gpt_hierarchical(images_64, prompt, client, in_context_images_6
                     messages=message_history,
                 )
                 image_descriptions.append(response.choices[0].message.content)
-                # print(f"RESPONSE TO IMAGE DESCRIP {j}: ", response.choices[0].message.content)
+                if debug:
+                    print(f"RESPONSE TO IMAGE DESCRIP {j}: ", response.choices[0].message.content)
                 assistant_message = response.choices[0].message
                 message_history.append(assistant_message)
                 context_no_images.append(response.choices[0].message.content)
@@ -288,7 +288,8 @@ def relabel_traj_gpt_hierarchical(images_64, prompt, client, in_context_images_6
                 messages=message_history,
             )
             assistant_message = response.choices[0].message
-            # print("RESPONSE TO FINAL CONTEXT: ", response.choices[0].message.content)
+            if debug:
+                print("RESPONSE TO FINAL CONTEXT: ", response.choices[0].message.content)
             message_history.append(assistant_message)
             context_no_images.append(response.choices[0].message.content)
     label = response.choices[0].message.content
@@ -348,6 +349,8 @@ def main(args):
     dataset = args.dataset
     print(f"Using dataset: {dataset}")
     output = args.output
+    if args.debug: 
+        output = output + "_debug"
     if args.overwrite:
         shutil.rmtree(output)
         os.makedirs(output)
@@ -375,26 +378,60 @@ def main(args):
             in_context_images_base64 = [pil_to_base64(img) for img in in_context_images]
 
     # Get paths 
-    paths = glob.glob(dataset + "/*")
+    # select subset of paths based on location 
+    bww1_paths = glob.glob(dataset + "/*bww1*")
+    print(f"Number of bww1 paths: {len(bww1_paths)}")
+    bww2_paths = glob.glob(dataset + "/*bww2*")
+    print(f"Number of bww2 paths: {len(bww2_paths)}")
+    bww8_paths = glob.glob(dataset + "/*bww8*")
+    print(f"Number of bww8 paths: {len(bww8_paths)}")
+    soda_paths = glob.glob(dataset + "/*soda3*")
+    print(f"Number of soda paths: {len(soda_paths)}")
+    cory_paths = glob.glob(dataset + "/*cory1*")
+    print(f"Number of cory paths: {len(cory_paths)}")
+    random.seed(42)
+    paths = random.choices(bww1_paths, k=100) + random.choices(bww2_paths, k=100) + random.choices(bww8_paths, k=100) + random.choices(soda_paths, k=100) + random.choices(cory_paths, k=100)
+    print(f"Number of paths: {len(paths)}")
 
-    # Process each path
+    if args.debug: 
+        paths = random.choices(paths, k=10)
+    current_state = None
+    starting_from_save = False
     traj_idx = 0
+    if os.path.exists(os.path.join(output, "current_state.pkl")):
+        print("Resuming from save")
+        current_state = np.load(os.path.join(output, "current_state.pkl"), allow_pickle=True)
+        starting_from_save = True
+        paths = paths[paths.index(current_state["trajectory"]):]
+        traj_list = os.listdir(output) 
+        traj_list.remove("current_state.pkl")
+        traj_idx = int(max([int(f.split("_")[-1]) for f in traj_list])) + 1
+        print("Current state: ", current_state)
+        print("Starting from trajectory index: ", traj_idx)
+    # Process each path
     traj_lens = np.arange(args.min_traj_len, args.max_traj_len)
     for idx, path in tqdm(enumerate(paths)):
-        print(f"Processing {idx}: {path}")
+        print(f"Processing path: {path}")
         total_traj_len = len(glob.glob(path + "/*.jpg"))
         with open(path + "/traj_data.pkl", "rb") as f:
             traj_data = pkl.load(f) 
-        i = 0
+        if current_state is not None and starting_from_save:
+            i = current_state["start"]
+        else:
+            i = 0
         while i < total_traj_len:
             traj_len = np.random.choice(traj_lens)
             traj_len = min(traj_len, total_traj_len)
 
             # Get traj range
-            start = i
-            end = min(i + traj_len, total_traj_len)
+            if current_state is not None and starting_from_save:
+                start = current_state["start"]
+                end = current_state["end"]
+                starting_from_save = False
+            else:
+                start = i
+                end = min(i + traj_len, total_traj_len)
             print(f"Trajectory length: {traj_len} starting at {start} ending at {end} in trajectory of length {total_traj_len}")
-
             # Get curr traj data
             curr_traj_data = {}
             for key in traj_data.keys():
@@ -425,12 +462,28 @@ def main(args):
                 imgs_base64 = [pil_to_base64(img) for img in imgs]
             
             # Relabel the trajectory
+            current_state = {"trajectory": path, "start": start, "end": end}
+            with open(os.path.join(output, "current_state.pkl"), "wb") as f:
+                pkl.dump(current_state, f)
             label = None
             context = None
             if model == "gpt":
-                print(args.prompt)
-                if args.prompt == "prompt_hierarchical.json":
-                    label, context = relabel_traj_gpt_hierarchical(imgs_base64, prompt, client, in_context_images_base64, in_context_text, args.model_name, actions=None)
+                if args.prompt == "prompt_hierarchical.json" or args.prompt == "prompt_hierarchical_templated.json":
+                    max_tries = 2
+                    tries = 0
+                    instruction_json = None
+                    while tries < max_tries:
+                        try:
+                            print("Getting instruction...")
+                            label, context = relabel_traj_gpt_hierarchical(imgs_base64, prompt, client, in_context_images_base64, in_context_text, args.model_name, actions=None, debug = args.debug)
+                            instruction_json = json.loads(label.lstrip("```json").rstrip("```").strip("\n").strip(" "))
+                            break
+                        except:
+                            print(f"Try {tries} of {max_tries}. Retrying...")
+                            tries += 1
+                            continue
+                    assert instruction_json is not None, "Failed to get instruction json"
+                    print("Got instruction")
                 else:
                     if imgs is not None: 
                         if args.use_actions:
@@ -449,13 +502,17 @@ def main(args):
             if label is None: 
                 label = "No label"
                 context = ["No context"]
-            print(f"Label: {label}")
-            # print(f"Context: {context}")
+            
+            instructions = []
+            for idx, inst in enumerate(instruction_json["instructions"]):
+                instruction = {"traj_description": inst}
+                instructions.append(instruction)
+            curr_traj_data["language_instructions"] = instructions
             # Save the output
             os.makedirs(os.path.join(output, f"traj_{traj_idx}"), exist_ok=True)
             for i in range(start, end):
                 shutil.copyfile(path + f"/{i}.jpg", os.path.join(output, f"traj_{traj_idx}", f"{i-start}.jpg"))
-            # pkl.dump(curr_traj_data, open(os.path.join(output, f"traj_{traj_idx}", "traj_data.pkl"), "wb"))
+            pkl.dump(curr_traj_data, open(os.path.join(output, f"traj_{traj_idx}", "traj_data.pkl"), "wb"))
             with open(os.path.join(output, f"traj_{traj_idx}", "label.txt"), "w") as f:
                 f.write(label)
             
@@ -477,17 +534,19 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default="gpt", help="gpt, gemini, prismatic, all")
     parser.add_argument("--model_name", type=str, default="gpt-4o", help="Name of specific model or path to model")
     parser.add_argument("--dataset", type=str, default="/home/noam/LLLwL/datasets/gnm_dataset/sacson", help="Path to dataset")
-    parser.add_argument("--min_traj_len", type=int, default=5, help="Length of trajectory")
-    parser.add_argument("--max_traj_len", type=int, default=10, help="Length of trajectory")
-    parser.add_argument("--period", type=int, default=1, help="Period of trajectory (sampling rate)")
+    parser.add_argument("--min_traj_len", type=int, default=10, help="Length of trajectory")
+    parser.add_argument("--max_traj_len", type=int, default=20, help="Length of trajectory")
+    parser.add_argument("--period", type=int, default=2, help="Period of trajectory (sampling rate)")
     parser.add_argument("--prompt", type=str, default="/home/noam/LLLwL/gemini/prompt.json", help="Path to prompt json file")
     parser.add_argument("--in_context", type=str, default=None, help="Path to in context yaml file with image paths and text")
-    parser.add_argument("--output", type=str, default="/home/noam/LLLwL/relabelling", help="Path to output directory")
+    parser.add_argument("--output", type=str, default="relabelling", help="Path to output directory")
     parser.add_argument("--annotation_type", type=str, default="sampled", help="Either drawn trajectory of sampled trajectory (choices: 'drawn', 'sampled')")
     parser.add_argument("--viz", action="store_true", help="Visualize the trajectory")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite the output directory")
     parser.add_argument("--use_actions", action="store_true", help="Use actions to generate the trajectory")
     parser.add_argument("--annotate", action="store_true", help="Annotate the images with frame number")
-
+    parser.add_argument("--debug", action="store_true", help="Debug mode")
+    
     args = parser.parse_args()
+    args.overwrite = False
     main(args)
