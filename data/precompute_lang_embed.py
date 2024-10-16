@@ -6,7 +6,8 @@ from tqdm import tqdm
 import pickle as pkl
 
 
-input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/relabelling"
+input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/cory_hall_labelled"
+# input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/go_stanford_cropped_labelled"
 lang_txt_paths = glob.glob(f"{input_path}/*/traj_data.pkl", recursive=True)
 model_version = "ViT-B/32"
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -19,9 +20,9 @@ for path in tqdm(lang_txt_paths):
         traj_data = pkl.load(old_file)
     if "text_features" in traj_data.keys():
         continue
-    lang_annotations = traj_data["language_instructions"]
-    traj_data["language_annotations"] = lang_annotations
-    del traj_data["language_instructions"]
+    lang_annotations = traj_data["language_annotations"]
+    # traj_data["language_annotations"] = lang_annotations
+    # del traj_data["language_instructions"]
     try:
         prompts = clip.tokenize([lang["traj_description"] for lang in lang_annotations]).to(device)
     except: 

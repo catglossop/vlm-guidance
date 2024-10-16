@@ -362,6 +362,7 @@ class LCBCDataset(Dataset):
             actions_torch,
             torch.as_tensor(selected_lang_embed, dtype=torch.float32),
             selected_lang,
+            torch.as_tensor(distance, dtype=torch.int64),
             torch.as_tensor(goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),

@@ -72,4 +72,10 @@ sacson_v2:
 frodo_dataset:
   metric_waypoint_spacing: 0.6
 
+cory_hall_labelled:
+  metric_waypoint_spacing: 0.06
+
+go_stanford_labelled:
+  metric_waypoint_spacing: 0.12
+
 # add your own dataset params here:

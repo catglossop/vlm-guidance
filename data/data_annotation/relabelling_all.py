@@ -389,15 +389,15 @@ def main(args):
     print(f"Number of soda paths: {len(soda_paths)}")
     cory_paths = glob.glob(dataset + "/*cory1*")
     print(f"Number of cory paths: {len(cory_paths)}")
-    random.seed(42)
-    paths = random.choices(bww1_paths, k=100) + random.choices(bww2_paths, k=100) + random.choices(bww8_paths, k=100) + random.choices(soda_paths, k=100) + random.choices(cory_paths, k=100)
+    paths = bww1_paths[:100] + bww2_paths[:100] + bww8_paths[:100] + soda_paths[:100] + cory_paths[:100]
+    paths = glob.glob(dataset + "/*")
     print(f"Number of paths: {len(paths)}")
 
     if args.debug: 
         paths = random.choices(paths, k=10)
     current_state = None
     starting_from_save = False
-    traj_idx = 0
+    
     if os.path.exists(os.path.join(output, "current_state.pkl")):
         print("Resuming from save")
         current_state = np.load(os.path.join(output, "current_state.pkl"), allow_pickle=True)
@@ -405,12 +405,12 @@ def main(args):
         paths = paths[paths.index(current_state["trajectory"]):]
         traj_list = os.listdir(output) 
         traj_list.remove("current_state.pkl")
-        traj_idx = int(max([int(f.split("_")[-1]) for f in traj_list])) + 1
         print("Current state: ", current_state)
-        print("Starting from trajectory index: ", traj_idx)
+
     # Process each path
     traj_lens = np.arange(args.min_traj_len, args.max_traj_len)
     for idx, path in tqdm(enumerate(paths)):
+        chunk_idx = 0
         print(f"Processing path: {path}")
         total_traj_len = len(glob.glob(path + "/*.jpg"))
         with open(path + "/traj_data.pkl", "rb") as f:
@@ -421,17 +421,18 @@ def main(args):
             i = 0
         while i < total_traj_len:
             traj_len = np.random.choice(traj_lens)
-            traj_len = min(traj_len, total_traj_len)
-
             # Get traj range
             if current_state is not None and starting_from_save:
                 start = current_state["start"]
                 end = current_state["end"]
                 starting_from_save = False
+                traj_len = end - start
             else:
                 start = i
                 end = min(i + traj_len, total_traj_len)
-            print(f"Trajectory length: {traj_len} starting at {start} ending at {end} in trajectory of length {total_traj_len}")
+                traj_len = end - start
+            print(f"Trajectory length {traj_len} starting at {start} ending at {end} in trajectory of length {total_traj_len}")
+
             # Get curr traj data
             curr_traj_data = {}
             for key in traj_data.keys():
@@ -445,12 +446,12 @@ def main(args):
             if annotation_type == "drawn":
                 imgs = draw_trajectory(path, start, end)
             elif annotation_type == "sampled":
-                imgs = [Image.open(path + f"/{i}.jpg") for i in range(start, end, period)]
+                imgs = [Image.open(path + f"/{k}.jpg") for k in range(start, end, period)]
                 if args.annotate:
                     temp_imgs = imgs
                     imgs = []
-                    for i, img in enumerate(temp_imgs):
-                        img = add_annotation(img, i)
+                    for j, img in enumerate(temp_imgs):
+                        img = add_annotation(img, j)
                         imgs.append(img)
                 if model == "prismatic":
                     raise ValueError("Prismatic cannot accept a sampled trajectory")
@@ -465,6 +466,7 @@ def main(args):
             current_state = {"trajectory": path, "start": start, "end": end}
             with open(os.path.join(output, "current_state.pkl"), "wb") as f:
                 pkl.dump(current_state, f)
+
             label = None
             context = None
             if model == "gpt":
@@ -474,7 +476,6 @@ def main(args):
                     instruction_json = None
                     while tries < max_tries:
                         try:
-                            print("Getting instruction...")
                             label, context = relabel_traj_gpt_hierarchical(imgs_base64, prompt, client, in_context_images_base64, in_context_text, args.model_name, actions=None, debug = args.debug)
                             instruction_json = json.loads(label.lstrip("```json").rstrip("```").strip("\n").strip(" "))
                             break
@@ -483,7 +484,6 @@ def main(args):
                             tries += 1
                             continue
                     assert instruction_json is not None, "Failed to get instruction json"
-                    print("Got instruction")
                 else:
                     if imgs is not None: 
                         if args.use_actions:
@@ -496,7 +496,6 @@ def main(args):
 
             elif model == "prismatic":
                 raise NotImplementedError("Prismatic is not yet supported")
-                #label, context = relabel_traj_prismatic(imgs, prompt, client, in_context_images, in_context_text)
             else:
                 raise ValueError("Invalid model name")
             if label is None: 
@@ -507,26 +506,29 @@ def main(args):
             for idx, inst in enumerate(instruction_json["instructions"]):
                 instruction = {"traj_description": inst}
                 instructions.append(instruction)
-            curr_traj_data["language_instructions"] = instructions
+            curr_traj_data["language_annotations"] = instructions
+
             # Save the output
-            os.makedirs(os.path.join(output, f"traj_{traj_idx}"), exist_ok=True)
-            for i in range(start, end):
-                shutil.copyfile(path + f"/{i}.jpg", os.path.join(output, f"traj_{traj_idx}", f"{i-start}.jpg"))
-            pkl.dump(curr_traj_data, open(os.path.join(output, f"traj_{traj_idx}", "traj_data.pkl"), "wb"))
-            with open(os.path.join(output, f"traj_{traj_idx}", "label.txt"), "w") as f:
+            traj_output_dir = os.path.join(output, f"{path.split('/')[-1]}_chunk_{chunk_idx}_start_{start}_end_{end}")
+            print("saving to ", traj_output_dir)
+            os.makedirs(traj_output_dir, exist_ok=True)
+            for m in range(start, end):
+                shutil.copyfile(path + f"/{m}.jpg", os.path.join(traj_output_dir, f"{m-start}.jpg"))
+            pkl.dump(curr_traj_data, open(os.path.join(traj_output_dir, "traj_data.pkl"), "wb"))
+            with open(os.path.join(traj_output_dir, "label.txt"), "w") as f:
                 f.write(label)
             
             # If viz, visualize the trajectory and save the context
             if args.viz and imgs is not None:
                 print("Visualizing trajectory")
                 if annotation_type == "sampled": 
-                    imgs[0].save(os.path.join(output, f"traj_viz_{traj_idx}.gif"), save_all=True, append_images=imgs[1:], duration=500, loop=0)
+                    imgs[0].save(os.path.join(traj_output_dir, f"traj_viz_{chunk_idx}.gif"), save_all=True, append_images=imgs[1:], duration=500, loop=0)
                 elif annotation_type == "drawn":
-                    imgs.save(os.path.join(output, f"traj_viz_{traj_idx}.jpg"))
-                with open(os.path.join(output, f"traj_{traj_idx}", "context.txt"), "w") as f:
+                    imgs.save(os.path.join(traj_output_dir, f"traj_viz_{chunk_idx}.jpg"))
+                with open(os.path.join(traj_output_dir, "context.txt"), "w") as f:
                     for c in context:
                         f.write(f"{c}\n")
-            traj_idx += 1
+            chunk_idx += 1
             i += traj_len
 
 if __name__ == "__main__":
@@ -534,12 +536,12 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default="gpt", help="gpt, gemini, prismatic, all")
     parser.add_argument("--model_name", type=str, default="gpt-4o", help="Name of specific model or path to model")
     parser.add_argument("--dataset", type=str, default="/home/noam/LLLwL/datasets/gnm_dataset/sacson", help="Path to dataset")
-    parser.add_argument("--min_traj_len", type=int, default=10, help="Length of trajectory")
-    parser.add_argument("--max_traj_len", type=int, default=20, help="Length of trajectory")
-    parser.add_argument("--period", type=int, default=2, help="Period of trajectory (sampling rate)")
+    parser.add_argument("--min_traj_len", type=int, default=15, help="Length of trajectory")
+    parser.add_argument("--max_traj_len", type=int, default=25, help="Length of trajectory")
+    parser.add_argument("--period", type=int, default=3, help="Period of trajectory (sampling rate)")
     parser.add_argument("--prompt", type=str, default="/home/noam/LLLwL/gemini/prompt.json", help="Path to prompt json file")
     parser.add_argument("--in_context", type=str, default=None, help="Path to in context yaml file with image paths and text")
-    parser.add_argument("--output", type=str, default="relabelling", help="Path to output directory")
+    parser.add_argument("--output", type=str, default="go_stanford_cropped_labelled", help="Path to output directory")
     parser.add_argument("--annotation_type", type=str, default="sampled", help="Either drawn trajectory of sampled trajectory (choices: 'drawn', 'sampled')")
     parser.add_argument("--viz", action="store_true", help="Visualize the trajectory")
     parser.add_argument("--overwrite", action="store_true", help="Overwrite the output directory")
