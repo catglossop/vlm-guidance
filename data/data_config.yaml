@@ -60,7 +60,7 @@ carla:
   metric_waypoint_spacing: 1.59
   image_path_func: get_image_path
 
-sacson:
+sacson_labelled:
   metric_waypoint_spacing: 0.255
 
 sacson_rand_len:

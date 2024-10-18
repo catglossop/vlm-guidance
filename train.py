@@ -289,7 +289,7 @@ def main(config):
         if config["scheduler"] == "cosine":
             print("Using cosine annealing with T_max", config["epochs"])
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=config["epochs"], eta_min=1.0e-6
+                optimizer, T_max=config["epochs"]*2, eta_min=1.0e-6
             )
         elif config["scheduler"] == "cyclic":
             print("Using cyclic LR with cycle", config["cyclic_period"])

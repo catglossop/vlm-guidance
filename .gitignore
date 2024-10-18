@@ -8,5 +8,5 @@ deployment/model_weights/
 *.jpg
 *.png
 *.jpg
-data/data_annotation/*_labelled/
+data/data_annotation/lcbc_datasets/
 

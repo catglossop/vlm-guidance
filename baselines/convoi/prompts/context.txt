@@ -1,0 +1,1 @@
+Describe this scenario. It is an indoor corridor, outdoor terrain, crosswalk, scenario with people facing each other, or scenario with people not facing each other. Choose one of these categories and return a string without punctuation. Do not explain.

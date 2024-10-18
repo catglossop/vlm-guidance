@@ -1,0 +1,1 @@
+You are a robot navigating among humans. Numbers are arranged in at max 3 rows. Select a point in each row away from people such that you dont disrupt or interrupt them. Return the points as a list. Do not explain.

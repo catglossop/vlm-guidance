@@ -6,8 +6,9 @@ from tqdm import tqdm
 import pickle as pkl
 
 
-input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/cory_hall_labelled"
+# input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/cory_hall_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/go_stanford_cropped_labelled"
+input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/sacson_labelled"
 lang_txt_paths = glob.glob(f"{input_path}/*/traj_data.pkl", recursive=True)
 model_version = "ViT-B/32"
 device = "cuda" if torch.cuda.is_available() else "cpu"

@@ -403,6 +403,7 @@ def main(args):
         current_state = np.load(os.path.join(output, "current_state.pkl"), allow_pickle=True)
         starting_from_save = True
         paths = paths[paths.index(current_state["trajectory"]):]
+        print("Number of paths remaining: ", len(paths))
         traj_list = os.listdir(output) 
         traj_list.remove("current_state.pkl")
         print("Current state: ", current_state)

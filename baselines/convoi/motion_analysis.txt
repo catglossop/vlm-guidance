@@ -1,0 +1,353 @@
+import numpy as np
+import picamera
+import picamera.array
+import time
+import RPi.GPIO as GPIO
+import smbus
+import subprocess
+import math
+import threading
+
+#lidar configuration variables
+lidar_address=0x62
+distWriteReg = 0x00
+distWriteVal = 0x04
+distReadReg1 = 0x8f
+distReadReg2 = 0x10
+velWriteReg = 0x04
+velWriteVal = 0x08
+velReadReg = 0x09
+
+# Power management registers
+imu_address=0x68
+power_mgmt_1 = 0x6b
+power_mgmt_2 = 0x6c
+
+gyro_x_offset = -2.03033587786
+gyro_y_offset = 0.969282442748
+gyro_z_offset = -1.50189312977
+
+
+distance=0
+bus=smbus.SMBus(1)
+i2c_address=6
+
+# Disable any warning message such as GPIO pins in use
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+    
+width=640
+height=480
+fps=15
+
+
+#percentage_to_keep=20
+
+#ncols=width//16+1
+#nrows=height//16
+
+buffer_index=0
+sample_buffer_x=[]
+sample_buffer_y=[]
+tap_coefs=[0.11554707639860304,0.29982701496719005,0.07038867308845864,0.2136045403910259,0.07038867308845864,0.29982701496719005,0.11554707639860304]
+#tap_coefs=[-0.0632152331707792,0.001505978947713351,0.006280973531062583,0.013990021680152525,0.024243079517262713,0.03645365041216428,0.0498499075235807,0.06351479627040205,0.07647207147084754,0.08763389388879564,0.0964101100463657,0.10197707370088244,0.10388383606041546,0.10197707370088244,0.0964101100463657,0.08763389388879564,0.07647207147084754,0.06351479627040205,0.0498499075235807,0.03645365041216428,0.024243079517262713,0.013990021680152525,0.006280973531062583,0.001505978947713351,-0.0632152331707792]
+TAP_NUMBER=len(tap_coefs)
+lidar_distance=0
+
+gyro_scale = 131.0
+accel_scale = 16384.0
+
+i2c_lock=0
+data=[0,0,0,0]
+mean_scale_x=0
+mean_scale_y=0
+number_of_sample=0
+
+def get_filtered_value():
+	result_x=0
+	result_y=0
+	index=buffer_index
+	
+	for i in range(TAP_NUMBER):
+		index=index-1
+		
+		if index<0:
+			index=TAP_NUMBER-1
+		
+		result_x+=tap_coefs[i]*sample_buffer_x[index]
+		result_y+=tap_coefs[i]*sample_buffer_y[index]
+		
+	return [result_x, result_y]
+
+#imu functions
+def read_all():
+	raw_gyro_data=bus.read_i2c_block_data(imu_address, 0x43, 6)
+	raw_accel_data=bus.read_i2c_block_data(imu_address, 0x3b, 6)
+	
+	gyro_scaled_x = twos_compliment((raw_gyro_data[0] << 8) + raw_gyro_data[1]) / gyro_scale - gyro_x_offset
+	gyro_scaled_y = twos_compliment((raw_gyro_data[2] << 8) + raw_gyro_data[3]) / gyro_scale - gyro_y_offset
+	gyro_scaled_z = twos_compliment((raw_gyro_data[4] << 8) + raw_gyro_data[5]) / gyro_scale - gyro_z_offset
+	
+	accel_scaled_x = twos_compliment((raw_accel_data[0] << 8) + raw_accel_data[1]) / accel_scale
+	accel_scaled_y = twos_compliment((raw_accel_data[2] << 8) + raw_accel_data[3]) / accel_scale
+	accel_scaled_z = twos_compliment((raw_accel_data[4] << 8) + raw_accel_data[5]) / accel_scale
+
+	return (gyro_scaled_x, gyro_scaled_y, gyro_scaled_z, accel_scaled_x, accel_scaled_y, accel_scaled_z)
+    
+def twos_compliment(val):
+    if (val >= 0x8000):
+        return -((65535 - val) + 1)
+    else:
+        return val
+
+def dist(a,b):
+    return math.sqrt((a*a)+(b*b))
+
+def get_y_rotation(x,y,z):
+    radians = math.atan2(x, dist(y,z))
+    return -math.degrees(radians)
+
+def get_x_rotation(x,y,z):
+    radians = math.atan2(y, dist(x,z))
+    return math.degrees(radians)
+
+def wait_lock_released():
+	while i2c_lock==1:
+		time.sleep(0.001)
+
+
+def i2c_communication(name, delay, run_event):
+	global lidar_distance
+	global last_gyro_read
+	global gyro_total_x
+	global gyro_total_y
+	global last_x
+	global last_y
+	global gyro_scaled_x
+	global gyro_scaled_y
+	global data
+	
+	K = 0.98
+	K1 = 1 - K
+
+	time_diff = 0.007
+	lidar_phase=0
+	i2c_sent_time=time.time()
+	radio_sent_time=time.time()
+	
+	while run_event.is_set():
+		try:
+			# lidar
+			if lidar_phase==0 or (lidar_phase==3 and time.time()-i2c_sent_time>0.02):
+				bus.write_byte_data(lidar_address, distWriteReg, distWriteVal)
+				i2c_sent_time=time.time()
+				lidar_phase=1
+				
+			if time.time()-i2c_sent_time>0.02 and lidar_phase==1:
+				dist1=bus.read_byte_data(lidar_address, distReadReg1)
+				i2c_sent_time=time.time()
+				lidar_phase=2
+				
+			if time.time()-i2c_sent_time>0.02 and lidar_phase==2:
+				dist2=bus.read_byte_data(lidar_address, distReadReg2)
+				i2c_sent_time=time.time()
+				lidar_phase=3
+				lidar_distance=(dist1 << 8) + dist2
+				#print lidar_distance
+			
+			
+			#imu sensor
+			if time.time()-last_gyro_read>time_diff:
+				(gyro_scaled_x, gyro_scaled_y, gyro_scaled_z, accel_scaled_x, accel_scaled_y, accel_scaled_z) = read_all()
+				
+				time_lapsed=time.time()-last_gyro_read
+				last_gyro_read=time.time()
+			
+				gyro_x_delta = (gyro_scaled_x * time_lapsed)
+				gyro_y_delta = (gyro_scaled_y * time_lapsed)
+	
+				gyro_total_x += gyro_x_delta
+				gyro_total_y += gyro_y_delta
+	
+				rotation_x = get_x_rotation(accel_scaled_x, accel_scaled_y, accel_scaled_z)
+				rotation_y = get_y_rotation(accel_scaled_x, accel_scaled_y, accel_scaled_z)
+	
+				last_x = K * (last_x + gyro_x_delta) + (K1 * rotation_x)
+				last_y = K * (last_y + gyro_y_delta) + (K1 * rotation_y)
+				
+				#print last_x,last_y
+				#print "{1:.2f} {2:.2f} {3:.2f} {4:.2f} {5:.2f} {6:.2f}".format((rotation_x), (gyro_total_x), (last_x), (rotation_y), (gyro_total_y), (last_y))		
+			else:
+				time.sleep(0.002)
+			
+			# sent informations to radio
+			if time.time()-radio_sent_time>0.01:
+				data[2]=(int(lidar_distance)>>8) & 0xff
+				data[3]=lidar_distance & 0xff
+				
+				#print data
+				bus.write_i2c_block_data(i2c_address, 0, data)
+				radio_sent_time=time.time()
+		except IOError:
+			subprocess.call(['i2cdetect', '-y', '1'])
+		
+
+	
+class DetectMotion(picamera.array.PiMotionAnalysis):
+    def analyse(self, a):
+    	global sample_buffer_x
+    	global sample_buffer_y
+    	global buffer_index
+    	global stored_last_x
+    	global stored_last_y
+	global data
+    	
+    	#threshold=np.percentile(a['sad'], percentage_to_keep)
+    	#bitmap_array=a['sad']<=threshold
+    	#x_shift=(a['x']*bitmap_array).astype(float).sum()/bitmap_array.sum()
+    	#y_shift=(a['y']*bitmap_array).astype(float).sum()/bitmap_array.sum()
+        
+        		
+	#weight_array=1.0/(a['sad']+1)
+	x_shift=np.average(a['x'])
+	y_shift=np.average(a['y'])
+	
+	rotation_since_last_shot_x=last_x-stored_last_x
+	rotation_since_last_shot_y=last_y-stored_last_y
+	
+	stored_last_x = last_x
+	stored_last_y = last_y
+	
+	# remove rotation movement
+	x_shift_corrected=x_shift-3.0*rotation_since_last_shot_x
+	y_shift_corrected=y_shift+2.5*rotation_since_last_shot_y
+	
+	
+	sample_buffer_x[buffer_index]=x_shift_corrected
+	sample_buffer_y[buffer_index]=y_shift_corrected
+	
+	
+	buffer_index=buffer_index+1
+	
+	if buffer_index>=TAP_NUMBER:
+		buffer_index=0
+	
+	data_motion = get_filtered_value()
+	
+
+	for i in range(2):
+		data_motion[i]=data_motion[i]*127/50
+		
+		if data_motion[i]>127:
+			data_motion[i]=127
+		
+		if data_motion[i]<-127:
+			data_motion[i]=-127
+			
+		data_motion[i]+=127
+		data_motion[i]=int(data_motion[i])
+		data[i]=data_motion[i]
+	
+	
+	print '%.2f' % data[0] + ' ' + '%.2f' % data[1]
+	#print '%.2f' % x_shift + ' ' + '%.2f' % y_shift
+	#print ''
+
+camera=picamera.PiCamera()
+camera.resolution = (width, height)
+camera.framerate = fps
+
+def camera_motion(name, delay, run_event):
+	while run_event.is_set():
+		camera.start_recording('/dev/null', format='h264', motion_output=DetectMotion(camera))
+		camera.wait_recording(10)
+		camera.stop_recording()
+
+
+if __name__ == "__main__":
+	for i in range(TAP_NUMBER):
+		sample_buffer_x.append(0)
+		sample_buffer_y.append(0)
+	
+	# Now wake the 6050 up as it starts in sleep mode
+	bus.write_byte_data(imu_address, power_mgmt_1, 0)
+
+	(gyro_scaled_x, gyro_scaled_y, gyro_scaled_z, accel_scaled_x, accel_scaled_y, accel_scaled_z) = read_all()
+
+	last_x = get_x_rotation(accel_scaled_x, accel_scaled_y, accel_scaled_z)
+	last_y = get_y_rotation(accel_scaled_x, accel_scaled_y, accel_scaled_z)
+
+	gyro_total_x = last_x
+	gyro_total_y = last_y
+	
+	stored_last_x = last_x
+	stored_last_y = last_y
+	
+	last_gyro_read=time.time()
+	
+	run_event = threading.Event()
+	run_event.set()
+	
+	d1=1
+	t1 = threading.Thread(target = i2c_communication, args = ("i2c",d1,run_event))
+	
+	dl=2
+	t2 = threading.Thread(target = camera_motion, args = ("camera",dl,run_event))
+	
+	t1.start()
+	time.sleep(.5)
+	t2.start()
+	
+	while run_event.is_set():
+		try:
+			time.sleep(1)
+		except KeyboardInterrupt:
+			print "attempting to close threads"
+			run_event.clear()
+			t1.join()
+			t2.join()
+			print "threads successfully closed"
+
+
+# we're no longer using the GPIO, so tell software we're done
+GPIO.cleanup()    
+
+"""
+	index_number=10
+	motion_norm=np.sqrt(np.square(a['x'].astype(np.float)) + np.square(a['y'].astype(np.float)))
+	histo=np.histogram(motion_norm,index_number)
+	histo_filtered=histo[0][1:10]
+	
+	#print(histo_filtered)
+	
+	index_max=np.argmax(histo_filtered)
+	
+	if index_max>0 and index_max<index_number-2:
+		index_inf=index_max-1
+		index_sup=index_max+1
+		
+		index_max=np.average(np.arange(index_max-1,index_max+1), weights=histo_filtered[index_max-1:index_max+1])
+	
+		index_inf=math.floor(index_max)+1
+		index_sup=index_inf+1
+		width=histo[1][index_sup]-histo[1][index_inf]
+		
+		speed_value=histo[1][index_inf]+(index_max-math.floor(index_max))*width
+	else:
+		index_inf=index_max+1
+		index_sup=index_inf+1
+		speed_value=histo[1][index_inf]+0.5*(histo[1][index_sup]-histo[1][index_inf])
+	
+	motion_norm=np.asarray(motion_norm)
+	new_weight_array = (motion_norm>=histo[1][index_inf])*(motion_norm<histo[1][index_sup])*1
+	
+	if np.sum(new_weight_array)>0:
+		x_shift_mean=np.average(a['x'],weights=new_weight_array)
+		y_shift_mean=np.average(a['y'],weights=new_weight_array)
+	else:
+		x_shift_mean=0
+		y_shift_mean=0
+		
+	print '%.2f' % x_shift_mean + ' ' + '%.2f' % y_shift_mean
+	print speed_value
+"""
