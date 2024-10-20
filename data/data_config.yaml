@@ -60,13 +60,25 @@ carla:
   metric_waypoint_spacing: 1.59
   image_path_func: get_image_path
 
+sacson_labelled:
+  metric_waypoint_spacing: 0.255
+
 sacson:
   metric_waypoint_spacing: 0.255
 
 sacson_rand_len:
   metric_waypoint_spacing: 0.255
 
+sacson_v2:
+  metric_waypoint_spacing: 0.255
+
 frodo_dataset:
   metric_waypoint_spacing: 0.6
+
+cory_hall_labelled:
+  metric_waypoint_spacing: 0.06
+
+go_stanford_labelled:
+  metric_waypoint_spacing: 0.12
 
 # add your own dataset params here:

@@ -1,0 +1,1 @@
+Disregard any memory from our previous conversation. This is a new task. Pick only one number in each row that lies close to a pavement. Do not select any number that lies on asphalt road, grass, gravel, or sand. Return them as a list of numbers within [] only. Do not explain.

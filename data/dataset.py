@@ -175,8 +175,7 @@ class LCBCDataset(Dataset):
         for traj_name in tqdm.tqdm(self.traj_names, disable=not use_tqdm, dynamic_ncols=True):
             traj_data = self._get_trajectory(traj_name)
             traj_len = len(traj_data["position"])
-
-            for goal_time in range(0, traj_len):
+            for goal_time in range(0, traj_len):                                                                                                                                                                                                                                                                                                                                                                               
                 goals_index.append((traj_name, goal_time))
 
             begin_time = self.context_size * self.waypoint_spacing
@@ -184,7 +183,6 @@ class LCBCDataset(Dataset):
             for curr_time in range(begin_time, end_time):
                 max_goal_distance = min(self.max_dist_cat * self.waypoint_spacing, traj_len - curr_time - 1)
                 samples_index.append((traj_name, curr_time, max_goal_distance))
-
         return samples_index, goals_index
 
     def _sample_goal(self, trajectory_name, curr_time, max_goal_dist):
@@ -334,9 +332,10 @@ class LCBCDataset(Dataset):
         assert goal_time < goal_traj_len, f"{goal_time} an {goal_traj_len}"
 
         # Load language embeddings
-        lang_embed = curr_traj_data[f"text_features"]
-        selected_lang_embed = lang_embed[np.random.randint(0, lang_embed.shape[0]), :]
-        selected_lang = curr_traj_data["language_annotations"][np.random.randint(0, lang_embed.shape[0])]["traj_description"]
+        lang_embed = curr_traj_data["text_features"]
+        random_ind = np.random.randint(0, lang_embed.shape[0])
+        selected_lang_embed = lang_embed[random_ind, :]
+        selected_lang = curr_traj_data["language_annotations"][random_ind]["traj_description"]
 
         # Compute actions
         actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time)
@@ -363,6 +362,7 @@ class LCBCDataset(Dataset):
             actions_torch,
             torch.as_tensor(selected_lang_embed, dtype=torch.float32),
             selected_lang,
+            torch.as_tensor(distance, dtype=torch.int64),
             torch.as_tensor(goal_pos, dtype=torch.float32),
             torch.as_tensor(self.dataset_index, dtype=torch.int64),
             torch.as_tensor(action_mask, dtype=torch.float32),

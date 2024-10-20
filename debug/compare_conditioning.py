@@ -67,7 +67,7 @@ def clip_embed(text, device):
     text_features = model.encode_text(text)
     return text_features
 
-def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2):
+def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2, viz_context):
     dataset_name = "sacson"
     fig, ax = plt.subplots(1, 2)
     if len(traj_1.shape) > 2:
@@ -95,11 +95,13 @@ def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2):
             traj_colors=[CYAN, MAGENTA],
             point_colors=[GREEN, RED],
         )
-    ax[0].legend([prompt_1, prompt_2])
+    ax[0].legend([prompt_1, prompt_2], bbox_to_anchor=(1.2, 1.7))
     ax[1].legend([prompt_1, prompt_2])
     ax[0].set_ylim((-5, 5))
     ax[0].set_xlim((-5, 15))
-    plt.savefig("comparison.png")
+    prompt_1_joined = ("_").join(prompt_1.split())
+    prompt_2_joined = ("_").join(prompt_2.split())
+    plt.savefig(f"comparison_1_{prompt_1_joined}_2_{prompt_2_joined}.png")
     plt.show()
 
 def load_config(config_path):
@@ -119,7 +121,7 @@ def model_output_lnp(model, noise_scheduler, context, prompt_embedding, pred_hor
         return model(context.clone(), prompt_embedding).detach().cpu().numpy()
     else:
         print(context.shape)
-        return model_output_diffusion_eval(model, noise_scheduler, context.clone(), prompt_embedding, pred_horizon, action_dim, num_samples, batch_size, device)["actions"].detach().cpu().numpy()
+        return model_output_diffusion_eval(model, noise_scheduler, context.clone(), prompt_embedding, None, pred_horizon, action_dim, num_samples, batch_size, device)["actions"].detach().cpu().numpy()
         
 def main(args): 
     config = load_config(args.config)
@@ -166,7 +168,7 @@ def main(args):
         if config["vision_encoder"] == "lnp_clip_film":
             vision_encoder = LNP_clip_FiLM(
                 obs_encoder=config["obs_encoder"],
-                obs_encoding_size=config["lang_encoding_size"],
+                obs_encoding_size=config["obs_encoding_size"],
                 context_size=config["context_size"],
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
@@ -182,7 +184,7 @@ def main(args):
             )
         noise_pred_net = ConditionalUnet1D(
                 input_dim=2,
-                global_cond_dim=config["encoding_size"]*(config["context_size"]+1),
+                global_cond_dim=config["encoding_size"]//2*(config["context_size"]+1),
                 down_dims=config["down_dims"],
                 cond_predict_scale=config["cond_predict_scale"],
             )
@@ -192,8 +194,27 @@ def main(args):
             noise_pred_net=noise_pred_net,
             dist_pred_net=dist_pred_network,
         )    
-    latest_path = os.path.join(args.model_path, "latest.pth")
-    latest_checkpoint = torch.load(latest_path, map_location=lambda storage, loc: storage.cuda(1)) #f"cuda:{}" if torch.cuda.is_available() else "cpu")
+    elif config["model_type"] == "lnp_multi_modal":
+        noise_scheduler = DDPMScheduler(
+                num_train_timesteps=config["num_diffusion_iters"],
+                beta_schedule='squaredcos_cap_v2',
+                clip_sample=True,
+                prediction_type='epsilon'
+            )
+        noise_pred_net = ConditionalUnet1D(
+                input_dim=2,
+                global_cond_dim=config["encoding_size"],
+                down_dims=config["down_dims"],
+                cond_predict_scale=config["cond_predict_scale"],
+            )
+        dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        model = LNP_MM(
+            vision_encoder=vision_encoder,
+            noise_pred_net=noise_pred_net,
+            dist_pred_net=dist_pred_network,
+        )  
+    checkpoint_path = os.path.join(args.model_path, f"{args.checkpoint}.pth")
+    latest_checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage.cuda(1)) #f"cuda:{}" if torch.cuda.is_available() else "cpu")
     load_model(model, config["model_type"], latest_checkpoint)
     model.to(args.device)
     model.eval()
@@ -207,6 +228,7 @@ def main(args):
         except:
             context_orig.append(Image.open(os.path.join(args.image_path, str(i)+".png")))
     context = transform_images(context_orig, IMAGE_SIZE).to(args.device)
+    viz_context = transform_images(context_orig, VISUALIZATION_IMAGE_SIZE)
     viz_img = transform_images(context_orig[-1], VISUALIZATION_IMAGE_SIZE)[0] 
     with torch.no_grad():
         if config["model_type"] == "rft":
@@ -214,9 +236,12 @@ def main(args):
             output_2 = model(context.clone(), prompt_embedding_2).detach().cpu().numpy()
         elif config["model_type"] == "lnp":
             context = context.reshape((-1, 3, 96, 96))
-            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_1, config["len_traj_pred"], 2, 5, 1, args.linear_output, args.device)
-            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_2, config["len_traj_pred"], 2, 5, 1, args.linear_output, args.device)
-    compare_output(output_1, output_2, viz_img, args.prompt_1, args.prompt_2)
+            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+        elif config["model_type"] == "lnp_multi_modal":
+            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+    compare_output(output_1, output_2, viz_img, args.prompt_1, args.prompt_2, viz_context)
 
 
 if __name__ == "__main__":
@@ -227,6 +252,9 @@ if __name__ == "__main__":
     parser.add_argument("--image_path", type=str, help="path to images")
     parser.add_argument("--start_idx", type=int, help="start index of context")
     parser.add_argument("--config", type=str, help="path to config file")
+    parser.add_argument("--random_image", action="store_true", help="use random image")
+    parser.add_argument("--linear_output", action="store_true", help="use linear output")
+    parser.add_argument("--checkpoint", type=int, help="checkpoint to load")
     args = parser.parse_args()
     device = "cuda:1" if torch.cuda.is_available() else None
     args.device = device

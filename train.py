@@ -8,7 +8,7 @@ import pdb
 
 import torch
 import torch.nn as nn
-from torch.utils.data import DataLoader, ConcatDataset
+from torch.utils.data import DataLoader, ConcatDataset, WeightedRandomSampler
 from torch.optim import Adam, AdamW
 from torchvision import transforms
 import torch.backends.cudnn as cudnn
@@ -18,8 +18,8 @@ from diffusers.optimization import get_scheduler
 
 
 from model.model import ResNetFiLMTransformer
-from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM
-from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp
+from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM, LNPMultiModal
+from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp, LNP_MM, DenseNetwork
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 
 
@@ -30,6 +30,7 @@ from train.training.train_eval_loop import (
     load_model,
     train_eval_loop_lnp,
     train_eval_loop_lnp_clip,  
+    train_eval_loop_multimodal,
 )
 
 
@@ -68,6 +69,7 @@ def main(config):
 
     # Load the data
     train_dataset = []
+    train_dataset_lengths = []
     test_dataloaders = {}
 
     if "context_type" not in config:
@@ -75,6 +77,16 @@ def main(config):
 
     if "clip_goals" not in config:
         config["clip_goals"] = False
+    
+    # Re-calibrate the weights on each of the datasets
+    weights = []
+    for dataset_name in config["datasets"]:
+        data_config = config["datasets"][dataset_name]
+        if "weight" not in data_config:
+            data_config["weight"] = 1
+        weights.append(data_config["weight"])
+    total_weight = sum(weights)
+    train_dataset_weights = [w / total_weight for w in weights]
 
     for dataset_name in config["datasets"]:
         data_config = config["datasets"][dataset_name]
@@ -111,6 +123,7 @@ def main(config):
                     )
                     if data_split_type == "train":
                         train_dataset.append(dataset)
+                        train_dataset_lengths.append(len(dataset))
                     else:
                         dataset_type = f"{dataset_name}_{data_split_type}"
                         if dataset_type not in test_dataloaders:
@@ -119,11 +132,13 @@ def main(config):
 
     # combine all the datasets from different robots
     train_dataset = ConcatDataset(train_dataset)
+    data_dist = np.concatenate([[train_dataset_weights[i]]*train_dataset_lengths[i] for i in range(len(train_dataset_lengths))])
+    sampler = WeightedRandomSampler(data_dist, len(train_dataset), replacement=True)
 
     train_loader = DataLoader(
         train_dataset,
         batch_size=config["batch_size"],
-        shuffle=True,
+        sampler = sampler,
         num_workers=config["num_workers"],
         drop_last=False,
         persistent_workers=True,
@@ -176,8 +191,21 @@ def main(config):
                 mha_ff_dim_factor=config["mha_ff_dim_factor"],
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
+    elif config["model_type"] == "lnp_multi_modal":
+        if config["vision_encoder"] == "lnp_multi_modal":
+            vision_encoder = LNPMultiModal(
+                obs_encoder=config["obs_encoder"],
+                obs_encoding_size=config["obs_encoding_size"],
+                lang_encoding_size=config["lang_encoding_size"],
+                context_size=config["context_size"],
+                mha_num_attention_heads=config["mha_num_attention_heads"],
+                mha_num_attention_layers=config["mha_num_attention_layers"],
+                mha_ff_dim_factor=config["mha_ff_dim_factor"],
+                )
+            vision_encoder = replace_bn_with_gn(vision_encoder)
     else:
         raise ValueError(f"Model {config['model_type']} not supported")
+    
     if config["model_type"] == "lnp":
         noise_scheduler = DDPMScheduler(
                 num_train_timesteps=config["num_diffusion_iters"],
@@ -192,7 +220,21 @@ def main(config):
                 cond_predict_scale=config["cond_predict_scale"],
             )
         dist_pred_network = DenseNetwork_lnp(embedding_dim=config["encoding_size"]*(config["context_size"]+1), control_horizon=config["len_traj_pred"])
-                
+    if config["model_type"] == "lnp_multi_modal":
+        noise_scheduler = DDPMScheduler(
+                num_train_timesteps=config["num_diffusion_iters"],
+                beta_schedule='squaredcos_cap_v2',
+                clip_sample=True,
+                prediction_type='epsilon'
+            )
+        noise_pred_net = ConditionalUnet1D(
+                input_dim=2,
+                global_cond_dim=config["encoding_size"],
+                down_dims=config["down_dims"],
+                cond_predict_scale=config["cond_predict_scale"],
+            )
+        dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+
     if config["vision_encoder"] == "lnp":   
         model = LNP(
             vision_encoder=vision_encoder,
@@ -211,7 +253,13 @@ def main(config):
             vision_encoder=vision_encoder,
             noise_pred_net=noise_pred_net,
             dist_pred_net=dist_pred_network,
-        )     
+        )   
+    elif config["vision_encoder"] == "lnp_multi_modal":
+        model = LNP_MM(
+            vision_encoder=vision_encoder,
+            noise_pred_net=noise_pred_net,
+            dist_pred_net=dist_pred_network,
+        )  
 
     if config["clipping"]:
         print("Clipping gradients to", config["max_norm"])
@@ -241,7 +289,7 @@ def main(config):
         if config["scheduler"] == "cosine":
             print("Using cosine annealing with T_max", config["epochs"])
             scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-                optimizer, T_max=config["epochs"], eta_min=1.0e-6
+                optimizer, T_max=config["epochs"]*2, eta_min=1.0e-6
             )
         elif config["scheduler"] == "cyclic":
             print("Using cyclic LR with cycle", config["cyclic_period"])
@@ -366,6 +414,31 @@ def main(config):
             eval_freq=config["eval_freq"],
             save_freq=config["save_freq"],
             linear_output=config["linear_output"],
+        ) 
+    elif config["model_type"] == "lnp_multi_modal":
+        train_eval_loop_multimodal(
+            train_model=config["train"],
+            model=model,
+            optimizer=optimizer,
+            lr_scheduler=scheduler,
+            noise_scheduler=noise_scheduler,
+            train_loader=train_loader,
+            test_dataloaders=test_dataloaders,
+            transform=transform,
+            goal_mask_prob=config["goal_mask_prob"],
+            epochs=config["epochs"],
+            device=device,
+            project_folder=config["project_folder"],
+            print_log_freq=config["print_log_freq"],
+            wandb_log_freq=config["wandb_log_freq"],
+            image_log_freq=config["image_log_freq"],
+            num_images_log=config["num_images_log"],
+            current_epoch=current_epoch,
+            alpha=float(config["alpha"]),
+            use_wandb=config["use_wandb"],
+            eval_fraction=config["eval_fraction"],
+            eval_freq=config["eval_freq"],
+            save_freq=config["save_freq"],
         ) 
     else:
         raise ValueError(f"Model {config['model']} not supported")

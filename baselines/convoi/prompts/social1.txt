@@ -1,0 +1,1 @@
+You are a robot navigating among humans. Numbers are arranged in at max 3 rows marked in different colors (red, green and blue). Select only one point in each color away from people such that you don't move in-between them. Return the points as a list. Do not explain.

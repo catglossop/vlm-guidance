@@ -1,0 +1,1 @@
+Disregard any memory from our previous conversation. This is a new task. Pick only one number in each row that lies close to the center of the zebra crossing. Do not return numbers on asphalt road, grass, gravel, or sand. Return them as a list of numbers within [] only. Do not explain.

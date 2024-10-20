@@ -1,0 +1,1 @@
+Disregard any memory from our previous conversation. This is a new task. Pick numbers in each row closest to the right wall of the corridor. Return them as a list of numbers within [] only. Do not explain.

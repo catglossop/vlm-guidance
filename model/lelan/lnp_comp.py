@@ -194,8 +194,121 @@ class LNP_clip_comp(nn.Module):
 
         return obs_encoding_tokens
 
+class LNPMultiModal(nn.Module):
+    def __init__(
+        self,
+        context_size: int = 5,
+        obs_encoder: Optional[str] = "efficientnet-b0",
+        obs_encoding_size: Optional[int] = 512,
+        lang_encoding_size: Optional[int] = 512,
+        mha_num_attention_heads: Optional[int] = 2,
+        mha_num_attention_layers: Optional[int] = 2,
+        mha_ff_dim_factor: Optional[int] = 4,
+    ) -> None:
+        """
+        NoMaD ViNT Encoder class
+        """
+        super().__init__()
+        self.obs_encoding_size = obs_encoding_size
+        self.lang_encoding_size = lang_encoding_size
+        self.goal_encoding_size = obs_encoding_size//4
+        self.context_size = context_size
+
+        # Initialize FiLM Model
+        self.film_model = make_model(self.lang_encoding_size, 3*(self.context_size+1), 8, 128, self.goal_encoding_size)
+
+        # Initialize the observation encoder
+        if obs_encoder.split("-")[0] == "efficientnet":
+            self.obs_encoder = EfficientNet.from_name(obs_encoder, in_channels=3) # context
+            self.obs_encoder = replace_bn_with_gn(self.obs_encoder)
+            self.num_obs_features = self.obs_encoder._fc.in_features
+            self.obs_encoder_type = "efficientnet"
+        else:
+            raise NotImplementedError
+
+        # Initialize the goal encoder
+        self.goal_encoder = EfficientNet.from_name("efficientnet-b0", in_channels=3*(self.context_size + 2)) # obs+goal
+        self.goal_encoder = replace_bn_with_gn(self.goal_encoder)
+        self.num_goal_features = self.goal_encoder._fc.in_features
+        
+        # Initialize compression layers if necessary
+        if self.num_obs_features != self.goal_encoding_size:
+            self.compress_obs_enc = nn.Linear(self.num_obs_features, self.goal_encoding_size)
+        else:
+            self.compress_obs_enc = nn.Identity()
+        
+        if self.num_goal_features != self.goal_encoding_size:
+            self.compress_goal_enc = nn.Linear(self.num_goal_features, self.goal_encoding_size)
+        else:
+            self.compress_goal_enc = nn.Identity()
+        
+        self.compress_final_enc = nn.Linear(self.goal_encoding_size + self.goal_encoding_size + self.num_obs_features, self.goal_encoding_size)
+        
+        # Initialize positional encoding and self-attention layers
+        self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=2) #no context
+        self.sa_layer = nn.TransformerEncoderLayer(
+            d_model=self.goal_encoding_size, 
+            nhead=mha_num_attention_heads, 
+            dim_feedforward=mha_ff_dim_factor*self.goal_encoding_size, 
+            activation="gelu", 
+            batch_first=True, 
+            norm_first=True
+        )
+        self.sa_encoder = nn.TransformerEncoder(self.sa_layer, num_layers=mha_num_attention_layers)
+
+        # Definition of the goal mask (convention: 0 = no mask, 1 = mask)
+        self.goal_mask = torch.zeros((1, self.context_size + 2), dtype=torch.bool)
+        self.goal_mask[:, -1] = True # Mask out the goal 
+        self.no_mask = torch.zeros((1, self.context_size + 2), dtype=torch.bool) 
+        self.all_masks = torch.cat([self.no_mask, self.goal_mask], dim=0)
+        self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((self.context_size + 2)/(self.context_size + 1))], dim=0)
+
+    def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, feat_text: torch.tensor):
+        # Get the image goal encoding
+        obsgoal_img = torch.cat([obs_img, goal_img], dim=1) # concatenate the obs image/context and goal image --> non image goal?
+        obsgoal_encoding = self.goal_encoder.extract_features(obsgoal_img) # get encoding of this img 
+        obsgoal_encoding = self.goal_encoder._avg_pooling(obsgoal_encoding) # avg pooling 
+        
+        if self.goal_encoder._global_params.include_top:
+            obsgoal_encoding = obsgoal_encoding.flatten(start_dim=1)
+            obsgoal_encoding = self.goal_encoder._dropout(obsgoal_encoding)
+        obsgoal_encoding = self.compress_goal_enc(obsgoal_encoding)
+
+        if len(obsgoal_encoding.shape) == 2:
+            obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
+        assert obsgoal_encoding.shape[2] == self.goal_encoding_size
+        
+        inst_encoding = feat_text
+        # Apply FiLM
+        obslang_encoding = self.film_model(obs_img, inst_encoding).unsqueeze(1)
+
+        # Get the obs encoding
+        obs_img = obs_img.reshape(-1, 3, obs_img.shape[-2], obs_img.shape[-1])
+        obs_encoding = self.obs_encoder.extract_features(obs_img)
+        obs_encoding = self.obs_encoder._avg_pooling(obs_encoding)
+        if self.obs_encoder._global_params.include_top:
+            obs_encoding = obs_encoding.flatten(start_dim=1)
+            obs_encoding = self.obs_encoder._dropout(obs_encoding)
+        obs_encoding = self.compress_obs_enc(obs_encoding)
+        obs_encoding = obs_encoding.unsqueeze(1)
+        obs_encoding = obs_encoding.reshape((self.context_size+1, -1, self.goal_encoding_size))
+        obs_encoding = torch.transpose(obs_encoding, 0, 1)
+        obs_encoding = torch.cat((obs_encoding, obslang_encoding, obsgoal_encoding), dim=1)  
+        if len(obsgoal_encoding.shape) == 2:
+            obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
+        assert obsgoal_encoding.shape[2] == self.goal_encoding_size
+        obs_encoding = obsgoal_encoding    
+
+        # Apply positional encoding 
+        if self.positional_encoding:
+            obs_encoding = self.positional_encoding(obs_encoding)
+        obs_encoding_tokens = self.sa_encoder(obs_encoding)
+        obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
+        return obs_encoding_tokens
+
 
 class LNP_clip_FiLM(nn.Module):
+
     def __init__(
         self,
         context_size: int = 5,
@@ -213,7 +326,7 @@ class LNP_clip_FiLM(nn.Module):
         self.goal_encoding_size = obs_encoding_size//4
         self.context_size = context_size
 
-        self.film_model = make_model(8, 10, 128)
+        self.film_model = make_model_old(8, 10, 128)
         self.num_goal_features = 1024
         
         if self.num_goal_features != self.goal_encoding_size:
@@ -324,8 +437,36 @@ def conv(ic, oc, k, s, p):
 
 
 class FeatureExtractor(nn.Module):
-    def __init__(self):
+    def __init__(self, in_channels, n_channels):
         super(FeatureExtractor, self).__init__()
+        
+        self.model = nn.Sequential(
+            conv(in_channels, n_channels, 5, 2, 2),
+            conv(n_channels, n_channels, 3, 2, 1),
+            conv(n_channels, n_channels, 3, 2, 1),
+
+        )
+        
+    def forward(self, x):
+        return self.model(x)
+
+class FeatureExtractor_last(nn.Module):
+    def __init__(self, n_channels):
+        super(FeatureExtractor_last, self).__init__()
+        
+        self.model = nn.Sequential(          
+            conv(n_channels, n_channels*2, 3, 2, 1),
+            conv(n_channels*2, n_channels*4, 3, 2, 1),
+            conv(n_channels*4, n_channels*8, 3, 2, 1),
+            conv(n_channels*8, n_channels*8, 3, 2, 1),                                
+        )
+        
+    def forward(self, x):
+        return self.model(x)
+
+class FeatureExtractor_old(nn.Module):
+    def __init__(self):
+        super(FeatureExtractor_old, self).__init__()
         
         self.model = nn.Sequential(
             #conv(3, 128, 5, 2, 2),
@@ -334,15 +475,14 @@ class FeatureExtractor(nn.Module):
             conv(3, 128, 5, 2, 2),
             conv(128, 128, 3, 2, 1),
             conv(128, 128, 3, 2, 1),
-
         )
         
     def forward(self, x):
         return self.model(x)
 
-class FeatureExtractor_last(nn.Module):
+class FeatureExtractor_last_old(nn.Module):
     def __init__(self):
-        super(FeatureExtractor_last, self).__init__()
+        super(FeatureExtractor_last_old, self).__init__()
         
         self.model = nn.Sequential(
             #conv(128, 256, 3, 2, 1), 
@@ -399,45 +539,61 @@ class ResBlock(nn.Module):
         x = x + identity
         
         return x
-
-class Classifier(nn.Module):
-    def __init__(self, prev_channels, n_classes):
-        super(Classifier, self).__init__()
-        
-        self.conv = nn.Conv2d(prev_channels, 512, 1, 1, 0)
-        self.relu = nn.ReLU(inplace=True)
-        self.global_max_pool = nn.AdaptiveMaxPool2d((1, 1))
-        self.model = nn.Sequential(nn.Linear(512, 1024),
-                                   nn.ReLU(inplace=True),
-                                   nn.Linear(1024, 1024),
-                                   nn.ReLU(inplace=True),
-                                   nn.Linear(1024, n_classes))
-        
-    def forward(self, x):
-        x = self.conv(x)
-        feature = x
-        x = self.global_max_pool(x)
-        x = x.view(x.size(0), x.size(1))
-        x = self.model(x)
-        
-        return x, feature
         
         
 class FiLM(nn.Module):
-    def __init__(self, n_res_blocks, n_classes, n_channels):
+    def __init__(self, input_dim, input_channels, n_res_blocks, n_channels, output_dim):
         super(FiLM, self).__init__()
         
-        dim_question = 512 #Output of CLIP
-        # Linear에서 나온 결과의 절반은 beta, 절반은 gamma
-        # beta, gamma 모두 ResBlock 하나당 n_channels개씩 feed
-        self.film_generator = nn.Linear(dim_question, 2 * n_res_blocks * n_channels)
-        self.feature_extractor = FeatureExtractor()
+        self.film_generator = nn.Linear(input_dim, 2 * n_res_blocks * n_channels)
+        self.feature_extractor = FeatureExtractor(input_channels, n_channels)
         self.res_blocks = nn.ModuleList()
-        self.feature_extractor_last = FeatureExtractor_last()
+        self.feature_extractor_last = FeatureExtractor_last(n_channels)
+        self.output_layer = nn.Linear(n_channels*n_res_blocks, output_dim)
+
         for _ in range(n_res_blocks):
             self.res_blocks.append(ResBlock(n_channels + 2, n_channels))
+    
+        self.n_res_blocks = n_res_blocks
+        self.n_channels = n_channels
+        
+    def forward(self, x, question):
+        batch_size = question.size(0)
+        device = question.device
+        x = self.feature_extractor(x)
+
+        film_vector = self.film_generator(question).view(
+            batch_size, self.n_res_blocks, 2, self.n_channels)
+        
+        d = x.size(2)
+        coordinate = torch.arange(-1, 1 + 0.00001, 2 / (d-1)).to(device)
+        coordinate_x = coordinate.expand(batch_size, 1, d, d)
+        coordinate_y = coordinate.view(d, 1).expand(batch_size, 1, d, d)
+        
+        for i, res_block in enumerate(self.res_blocks):
+            beta = film_vector[:, i, 0, :]
+            gamma = film_vector[:, i, 1, :]
             
-        self.classifier = Classifier(n_channels, n_classes)
+            x = torch.cat([x, coordinate_x, coordinate_y], 1)
+            x = res_block(x, beta, gamma)
+        
+        feature = self.feature_extractor_last(x)
+        if len(feature.shape) != 2:
+            feature = feature.squeeze(2).squeeze(2)
+        feature = self.output_layer(feature)
+        return feature
+
+class FiLM_old(nn.Module):
+    def __init__(self, n_res_blocks, n_classes, n_channels):
+        super(FiLM_old, self).__init__()
+        dim_question = 512
+        self.film_generator = nn.Linear(dim_question, 2 * n_res_blocks * n_channels)
+        self.feature_extractor = FeatureExtractor_old()
+        self.res_blocks = nn.ModuleList()
+        self.feature_extractor_last = FeatureExtractor_last_old()
+
+        for _ in range(n_res_blocks):
+            self.res_blocks.append(ResBlock(n_channels + 2, n_channels))
     
         self.n_res_blocks = n_res_blocks
         self.n_channels = n_channels
@@ -447,7 +603,6 @@ class FiLM(nn.Module):
         device = x.device
         
         x = self.feature_extractor(x)
-        #print("feature_extractor", x.size())
         question = question.repeat_interleave(6, dim=0)
 
         film_vector = self.film_generator(question).view(
@@ -466,13 +621,14 @@ class FiLM(nn.Module):
             x = res_block(x, beta, gamma)
         
         feature = self.feature_extractor_last(x)
-        #print("feature_extractor_last", feature.size())
-        #x = self.classifier(x)
         
         return feature
 
-def make_model(n_res, n_classes, n_channels):
-    return FiLM(n_res, n_classes, n_channels)
+def make_model(input_dim, input_channels, n_res, n_channels, output_dim):
+    return FiLM(input_dim, input_channels, n_res, n_channels, output_dim)
+
+def make_model_old(n_res, n_classes, n_channels):
+    return FiLM_old(n_res, n_classes, n_channels)
                
 
 

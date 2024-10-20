@@ -4,7 +4,7 @@ run_name: lelan
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
 train: True
-batch_size: 200
+batch_size: 128
 epochs: 200
 gpu_ids: [0]
 num_workers: 12
@@ -25,8 +25,9 @@ model: lnp
 model_type: lnp
 clip_model_type: ViT-B/32
 vision_encoder: lnp_clip_film
-efficientnet_model: efficientnet-b0
+efficientnet_model: efficientnet-b2
 encoding_size: 512
+obs_encoding_size: 1024
 lang_encoding_size: 512
 obs_encoder: efficientnet-b0
 mha_num_attention_heads: 4
@@ -52,33 +53,43 @@ alpha: 1e-4
 
 # distance bounds for distance and action and distance predictions 
 distance:
-  min_dist_cat: 10
-  max_dist_cat: 40
+  min_dist_cat: 0
+  max_dist_cat: 25
 action:
-  min_dist_cat: 10
-  max_dist_cat: 40
+  min_dist_cat: 2
+  max_dist_cat: 25
 
 # action output params
-len_traj_pred: 12
+len_traj_pred: 8
 learn_angle: False
 
 # dataset specific parameters
 image_size: [96, 96] # width, height
 datasets:
-  sacson_rand_len:
-    data_folder: /hdd/sacson_language_rand_15_25
-    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_rand_len/train/ # path to train folder with traj_names.txt
-    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_rand_len/test/ # path to test folder with traj_names.txt
-    end_slack: 3 # because many trajectories end in collisions
+  sacson_labelled:
+    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/sacson_labelled/
+    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_labelled/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_labelled/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: True # negative mining from the ViNG paper (Shah et al.)
-  sacson:
-    data_folder: /hdd/sacson_language_1
-    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson/train/ # path to train folder with traj_names.txt
-    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson/test/ # path to test folder with traj_names.txt
-    end_slack: 3 # because many trajectories end in collisions
+    weight: 0.5
+  cory_hall_labelled:
+    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/cory_hall_labelled/
+    train: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_labelled/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_labelled/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: True # negative mining from the ViNG paper (Shah et al.)
+    weight: 0.5
+  go_stanford_labelled:
+    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/go_stanford_cropped_labelled/
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_labelled/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_labelled/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: True # negative mining from the ViNG paper (Shah et al.)
+    weight: 0.5
 
 # logging stuff
 ## =0 turns off
@@ -89,4 +100,4 @@ pairwise_test_freq: 0 # in epochs
 eval_fraction: 0.25
 wandb_log_freq: 10 # in iterations
 eval_freq: 1 # in epochs
-save_freq: 1 # in epochs
+save_freq: 5 # in epochs
