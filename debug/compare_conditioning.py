@@ -213,8 +213,8 @@ def main(args):
             noise_pred_net=noise_pred_net,
             dist_pred_net=dist_pred_network,
         )  
-    latest_path = os.path.join(args.model_path, "latest.pth")
-    latest_checkpoint = torch.load(latest_path, map_location=lambda storage, loc: storage.cuda(1)) #f"cuda:{}" if torch.cuda.is_available() else "cpu")
+    checkpoint_path = os.path.join(args.model_path, f"{args.checkpoint}.pth")
+    latest_checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage.cuda(1)) #f"cuda:{}" if torch.cuda.is_available() else "cpu")
     load_model(model, config["model_type"], latest_checkpoint)
     model.to(args.device)
     model.eval()
@@ -254,6 +254,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", type=str, help="path to config file")
     parser.add_argument("--random_image", action="store_true", help="use random image")
     parser.add_argument("--linear_output", action="store_true", help="use linear output")
+    parser.add_argument("--checkpoint", type=int, help="checkpoint to load")
     args = parser.parse_args()
     device = "cuda:1" if torch.cuda.is_available() else None
     args.device = device
