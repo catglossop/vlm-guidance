@@ -60,7 +60,7 @@ class LowLevelPolicy(Node):
         self.context_size = 5
         self.num_samples = args.num_samples
         
-        self.language_prompt = "Move away from the trash bin in the first room"
+        self.language_prompt = "Move to the workspace area"
 
         # Load the config
         self.load_config(ROBOT_CONFIG_PATH)
@@ -75,7 +75,6 @@ class LowLevelPolicy(Node):
         self.clip_language_embedding =  clip.tokenize(self.language_prompt).to(self.device)
         self.clip_language_embedding = self.clip_model.encode_text(self.clip_language_embedding).to(torch.float)
  
-
         # Load data config
         self.load_data_config()
         
@@ -210,7 +209,7 @@ class LowLevelPolicy(Node):
             print(f"Loading model from {self.ckpth_path}")
         else:
             raise FileNotFoundError(f"Model weights not found at {self.ckpth_path}")
-        if self.model_type == "lelan": 
+        if self.model_type.split("_")[0] == "lelan": 
             self.noise_scheduler = DDPMScheduler(
                     num_train_timesteps=self.model_params["num_diffusion_iters"],
                     beta_schedule='squaredcos_cap_v2',
@@ -265,7 +264,7 @@ class LowLevelPolicy(Node):
             self.sampled_actions_pub.publish(self.sampled_actions_msg)
             self.naction = self.naction[0] 
             self.chosen_waypoint = self.naction[self.args.waypoint] 
-        elif self.model_type == "lelan":
+        elif self.model_type.split("_")[0] == "lelan":
             context = self.obs_images.reshape((-1, 3, 96, 96))
             self.naction = model_output_diffusion_eval(self.model, self.noise_scheduler, context.clone(), self.clip_language_embedding.clone(), self.model_params["len_traj_pred"], 2, self.num_samples, 1, self.device)["actions"].detach().cpu().numpy()
             self.sampled_actions_msg = Float32MultiArray()
@@ -276,18 +275,24 @@ class LowLevelPolicy(Node):
             self.chosen_waypoint = self.naction[self.args.waypoint] 
 
     def timer_callback(self):
-
+        start = time.time()
         self.chosen_waypoint = np.zeros(4, dtype=np.float32)
         if len(self.context_queue) > self.context_size:
 
             # Process observations
+            start_image_time = time.time()
             self.process_images()
-
+            print("Process time: ", time.time() - start_image_time)
+            
             # Use policy to get actions
+            start_infer_time = time.time()
             self.infer_actions()
+            print("Infer time: ", time.time() - start_infer_time)
 
             # Visualize actions 
+            start_viz_time = time.time()
             self.compare_output()
+            print("Compare time: ", time.time() - start_viz_time)
 
         # Normalize and publish waypoint
         if self.model_params["normalize"]:
@@ -296,6 +301,7 @@ class LowLevelPolicy(Node):
         print("Chosen waypoint: ", self.chosen_waypoint)
         self.waypoint_msg.data = self.chosen_waypoint.tolist()
         self.waypoint_pub.publish(self.waypoint_msg)
+        print("Elapsed time: ", time.time() - start )
 
 def main(args):
     rclpy.init()
@@ -314,7 +320,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--waypoint",
         "-w",
-        default=2, # close waypoints exihibit straight line motion (the middle waypoint is a good default)
+        default=4, # close waypoints exihibit straight line motion (the middle waypoint is a good default)
         type=int,
         help=f"""index of the waypoint used for navigation (between 0 and 4 or 
         how many waypoints your model predicts) (default: 2)""",

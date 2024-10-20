@@ -54,7 +54,7 @@ def load_model(
         if config["vision_encoder"] == "lnp_clip_film":
             vision_encoder = LNP_clip_FiLM(
                 obs_encoder=config["obs_encoder"],
-                obs_encoding_size=config["lang_encoding_size"],
+                obs_encoding_size=config["obs_encoding_size"],
                 context_size=config["context_size"],
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
@@ -69,7 +69,7 @@ def load_model(
             )
         noise_pred_net = ConditionalUnet1D(
                 input_dim=2,
-                global_cond_dim=config["encoding_size"]*(config["context_size"]+1),
+                global_cond_dim=config["encoding_size"]//2*(config["context_size"]+1),
                 down_dims=config["down_dims"],
                 cond_predict_scale=config["cond_predict_scale"],
             )
