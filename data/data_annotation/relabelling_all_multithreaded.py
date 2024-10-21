@@ -16,16 +16,17 @@ import pickle as pkl
 import json
 from tqdm import tqdm 
 import cv2
+from multiprocessing import Pool, Lock
+from tqdm_multiprocess import TqdmMultiProcessPool
+
 # OPTIONAL (FOR VISUALIZATION ONLY)
 CAMERA_METRICS = {"camera_height" : 0.95, # meters
                 "camera_x_offset" : 0.45, # distance between the center of the robot and the forward facing camera
                 "camera_matrix" : {"fx": 272.547000, "fy": 266.358000, "cx": 320.000000, "cy": 220.000000},
                 "dist_coeffs" : {"k1": -0.038483, "k2": -0.010456, "p1": 0.003930, "p2": -0.001007, "k3": 0.000000}}
-# CAMERA_METRICS = {"camera_height" : 0.60, # meters
-#                 "camera_x_offset" : 0.10, # distance between the center of the robot and the forward facing camera
-#                 "camera_matrix" : {"fx": 68.13675, "fy": 66.5895, "cx": 80, "cy": 55},
-#                 "dist_coeffs" : {"k1": -0.038483, "k2": -0.010456, "p1": 0.003930, "p2": -0.001007, "k3": 0.000000}}
 VIZ_IMAGE_SIZE = (480, 640)  # (height, width)
+TRANSITION_TO_MUTLIPROCESS = True
+lock = Lock()
 # Utility functions
 def pil_to_base64(img):
     img.save("temp.jpg")
@@ -402,7 +403,7 @@ def main(args):
     current_state = None
     starting_from_save = False
     
-    if os.path.exists(os.path.join(output, "current_state/current_state.pkl")):
+    if os.path.exists(os.path.join(output, "current_state/current_state.pkl")) and TRANSITION_TO_MUTLIPROCESS:
         print("Resuming from save")
         current_state = np.load(os.path.join(output, "current_state/current_state.pkl"), allow_pickle=True)
         starting_from_save = True
@@ -413,18 +414,51 @@ def main(args):
         path_keys = set(path_keys)
         remaining_path_idxs = [i for i, p in enumerate(paths) if p.split("/")[-1] not in completed_set]
         paths = [paths[i] for i in remaining_path_idxs]
-        # paths = paths[paths.index(current_state["trajectory"]):]
         print("Number of paths remaining: ", len(paths))
         traj_list = os.listdir(output) 
         traj_list.remove("current_state")
         print("Current state: ", current_state)
 
     # Process each path
-    traj_lens = np.arange(args.min_traj_len, args.max_traj_len)
+    path_shards = np.array_split(paths, args.num_processes)
 
-    for idx, path in tqdm(enumerate(paths)):
+    tasks = [(label_trajectories, (i, path_shards[i], output, annotation_type, model, prompt, in_context_images, in_context_images_base64, in_context_text, period, args, current_state, starting_from_save)) for i in range(args.num_processes)]
+    pool = TqdmMultiProcessPool(args.num_processes)
+    print("Starting multiprocessing")
+    with tqdm(total=len(tasks), 
+              dynamic_ncols=True,
+              position=0,
+              desc="Total progress"
+    ) as pbar:
+        pool.map(pbar, tasks, lambda _: None, lambda _: None)
+
+def label_trajectories(thread_num, paths, output, annotation_type, model, prompt, in_context_images, in_context_images_base64, in_context_text, period, args, current_state=None, starting_from_save=False, tqdm_func=None, global_tqdm=None):
+    if model == "gpt":
+        OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
+        ORGANIZATION_ID = os.environ.get("ORGANIZATION_ID")
+        client = OpenAI(api_key=OPENAI_KEY,organization = ORGANIZATION_ID)
+    elif model == "gemini":
+        genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+        client = genai.GenerativeModel(model_name="gemini-1.5-flash")
+    elif model == "prismatic":
+        raise NotImplementedError("Prismatic is not yet supported")
+    else: 
+        raise ValueError("Invalid model name")
+    print(f"In thread {thread_num}")
+    # if os.path.exists(os.path.join(output, f"current_state/current_state_{thread_num}.pkl")):
+    #     print("Resuming from save")
+    #     current_state = np.load(os.path.join(output, f"current_state/current_state_{thread_num}.pkl"), allow_pickle=True)
+    #     starting_from_save = True
+    #     paths = paths[paths.index(current_state["trajectory"]):]
+    #     print("Number of paths remaining: ", len(paths))
+    #     traj_list = os.listdir(output) 
+    #     traj_list.remove("current_state")
+    #     print("Current state: ", current_state)
+
+    traj_lens = np.arange(args.min_traj_len, args.max_traj_len)
+    for path in paths:
         chunk_idx = 0
-        print(f"Processing path: {path}")
+        # print(f"Processing path: {path}")
         total_traj_len = len(glob.glob(path + "/*.jpg"))
         with open(path + "/traj_data.pkl", "rb") as f:
             traj_data = pkl.load(f) 
@@ -432,6 +466,8 @@ def main(args):
             i = current_state["start"]
         else:
             i = 0
+        if len(traj_data["yaw"]) < 2:
+            continue
         while i < total_traj_len:
             traj_len = np.random.choice(traj_lens)
             # Get traj range
@@ -444,7 +480,7 @@ def main(args):
                 start = i
                 end = min(i + traj_len, total_traj_len)
                 traj_len = end - start
-            print(f"Trajectory length {traj_len} starting at {start} ending at {end} in trajectory of length {total_traj_len}")
+            # print(f"Trajectory length {traj_len} starting at {start} ending at {end} in trajectory of length {total_traj_len}")
 
             # Get curr traj data
             curr_traj_data = {}
@@ -477,8 +513,9 @@ def main(args):
             
             # Relabel the trajectory
             current_state = {"trajectory": path, "start": start, "end": end}
-            with open(os.path.join(output, "current_state.pkl"), "wb") as f:
-                pkl.dump(current_state, f)
+            with lock:
+                with open(os.path.join(output, f"current_state_{thread_num}.pkl"), "wb") as f:
+                    pkl.dump(current_state, f)
 
             label = None
             context = None
@@ -493,7 +530,7 @@ def main(args):
                             instruction_json = json.loads(label.lstrip("```json").rstrip("```").strip("\n").strip(" "))
                             break
                         except:
-                            print(f"Try {tries} of {max_tries}. Retrying...")
+                            # print(f"Try {tries} of {max_tries}. Retrying...")
                             tries += 1
                             continue
                     assert instruction_json is not None, "Failed to get instruction json"
@@ -527,7 +564,8 @@ def main(args):
             os.makedirs(traj_output_dir, exist_ok=True)
             for m in range(start, end):
                 shutil.copyfile(path + f"/{m}.jpg", os.path.join(traj_output_dir, f"{m-start}.jpg"))
-            pkl.dump(curr_traj_data, open(os.path.join(traj_output_dir, "traj_data.pkl"), "wb"))
+            with lock:
+                pkl.dump(curr_traj_data, open(os.path.join(traj_output_dir, "traj_data.pkl"), "wb"))
             with open(os.path.join(traj_output_dir, "label.txt"), "w") as f:
                 f.write(label)
             
@@ -561,6 +599,7 @@ if __name__ == "__main__":
     parser.add_argument("--use_actions", action="store_true", help="Use actions to generate the trajectory")
     parser.add_argument("--annotate", action="store_true", help="Annotate the images with frame number")
     parser.add_argument("--debug", action="store_true", help="Debug mode")
+    parser.add_argument("--num_processes", type=int, default=4, help="Number of processes")
     
     args = parser.parse_args()
     args.overwrite = False
