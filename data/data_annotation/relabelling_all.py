@@ -564,4 +564,15 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
     args.overwrite = False
-    main(args)
+    failure_count = 0
+    print("Running until complete!")
+    while True:
+        try:
+            main(args)
+            break
+        except Exception as e:
+            print("Function errored out!", e)
+            print(f"Function failed {failure_count} times")
+            print("Retrying ... ")
+            failure_count += 1
+    print(f"Function completed successfully with {failure_count} failures")
