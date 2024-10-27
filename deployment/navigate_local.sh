@@ -22,7 +22,7 @@ tmux send-keys "launch/launch_robot.sh" Enter
 # Run the navigate.py script with command line args in the second pane
 tmux select-pane -t 1
 tmux send-keys "conda activate hi_learn" Enter
-tmux send-keys "python low_level_policy.py $@" Enter
+tmux send-keys "python navigate_local.py $@" Enter
 
 # Run the pd_controller.py script in the fourth pane
 tmux select-pane -t 2
