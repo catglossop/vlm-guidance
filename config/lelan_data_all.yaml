@@ -26,7 +26,7 @@ model_type: lnp
 clip_model_type: ViT-B/32
 vision_encoder: lnp_clip_film
 efficientnet_model: efficientnet-b2
-encoding_size: 512
+encoding_size: 256
 obs_encoding_size: 1024
 lang_encoding_size: 512
 obs_encoder: efficientnet-b0

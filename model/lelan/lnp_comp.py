@@ -138,14 +138,14 @@ class LNP_clip_comp(nn.Module):
             self.compress_obs_enc = nn.Identity()
         
         if self.num_goal_features != self.goal_encoding_size:
-            self.compress_goal_enc = nn.Linear(self.num_goal_features + 512, self.goal_encoding_size) #clip feature
+            self.compress_goal_enc = nn.Linear(self.num_goal_features, self.goal_encoding_size) #clip feature
         else:
             self.compress_goal_enc = nn.Identity()
 
         # Initialize positional encoding and self-attention layers
         self.positional_encoding = PositionalEncoding(self.obs_encoding_size, max_seq_len=2) #no context
         self.sa_layer = nn.TransformerEncoderLayer(
-            d_model=self.obs_encoding_size, 
+            d_model=self.goal_encoding_size, 
             nhead=mha_num_attention_heads, 
             dim_feedforward=mha_ff_dim_factor*self.obs_encoding_size, 
             activation="gelu", 
@@ -162,16 +162,13 @@ class LNP_clip_comp(nn.Module):
         self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((self.context_size + 2)/(self.context_size + 1))], dim=0)
 
     def forward(self, obs_img: torch.tensor, feat_text: torch.tensor):#inst_ref: torch.tensor
+        
+        inst_encoding = feat_text
 
-        device = obs_img.device
         # Initialize the goal encoding
-        goal_encoding = torch.zeros((obs_img.size()[0], 1, self.goal_encoding_size)).to(device)
         obsgoal_img = obs_img       
         obsgoal_encoding = self.goal_encoder.extract_features(obsgoal_img) # get encoding of this img 
         obsgoal_encoding = self.goal_encoder._avg_pooling(obsgoal_encoding) # avg pooling 
-        
-        #with torch.no_grad():
-        inst_encoding = feat_text
         
         if self.goal_encoder._global_params.include_top:
             obsgoal_encoding = obsgoal_encoding.flatten(start_dim=1)
@@ -314,6 +311,7 @@ class LNP_clip_FiLM(nn.Module):
         context_size: int = 5,
         obs_encoder: Optional[str] = "efficientnet-b0",
         obs_encoding_size: Optional[int] = 512,
+        lang_encoding_size: Optional[int] = 512,
         mha_num_attention_heads: Optional[int] = 2,
         mha_num_attention_layers: Optional[int] = 2,
         mha_ff_dim_factor: Optional[int] = 4,
@@ -323,17 +321,29 @@ class LNP_clip_FiLM(nn.Module):
         """
         super().__init__()
         self.obs_encoding_size = obs_encoding_size
+        self.lang_encoding_size = lang_encoding_size
         self.goal_encoding_size = obs_encoding_size//4
         self.context_size = context_size
 
-        self.film_model = make_model_old(8, 10, 128)
-        self.num_goal_features = 1024
-        
-        if self.num_goal_features != self.goal_encoding_size:
-            self.compress_goal_enc = nn.Linear(self.num_goal_features, self.goal_encoding_size) #clip feature
+        # Initialize the observation encoder
+        if obs_encoder.split("-")[0] == "efficientnet":
+            self.obs_encoder = EfficientNet.from_name(obs_encoder, in_channels=3) # context
+            self.obs_encoder = replace_bn_with_gn(self.obs_encoder)
+            self.num_obs_features = self.obs_encoder._fc.in_features
+            self.obs_encoder_type = "efficientnet"
         else:
-            self.compress_goal_enc = nn.Identity()
+            raise NotImplementedError
+
+        # Initialize FiLM Model
+        self.film_model = make_model(self.lang_encoding_size, 3*(self.context_size+1), 8, 128, self.goal_encoding_size)
         
+        # Initialize compression layers if necessary
+        if self.num_obs_features != self.goal_encoding_size:
+            self.compress_obs_enc = nn.Linear(self.num_obs_features, self.goal_encoding_size)
+        else:
+            self.compress_obs_enc = nn.Identity()
+
+        self.compress_final_enc = nn.Linear(self.goal_encoding_size + self.num_obs_features, self.goal_encoding_size)
 
         # Initialize positional encoding and self-attention layers
         self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=2) #no context
@@ -354,18 +364,29 @@ class LNP_clip_FiLM(nn.Module):
         self.all_masks = torch.cat([self.no_mask, self.goal_mask], dim=0)
         self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((self.context_size + 2)/(self.context_size + 1))], dim=0)
 
-    def forward(self, obs_img: torch.tensor, feat_text: torch.tensor):#inst_ref: torch.tensor
+    def forward(self, obs_img: torch.tensor, feat_text: torch.tensor):
+        # Get the obs + lang encoding (goal encoding)
+        obsgoal_encoding = self.film_model(obs_img, feat_text).unsqueeze(1)
 
-        obsgoal_img = obs_img
-        
-        inst_encoding = feat_text
-        obsgoal_encoding = self.film_model(obsgoal_img, inst_encoding)
-        obsgoal_encoding_cat = obsgoal_encoding.flatten(start_dim=1)
-        obsgoal_encoding = self.compress_goal_enc(obsgoal_encoding_cat)        
+        # Get the obs encoding
+        obs_img = obs_img.reshape(-1, 3, obs_img.shape[-2], obs_img.shape[-1])
+        obs_encoding = self.obs_encoder.extract_features(obs_img)
+        obs_encoding = self.obs_encoder._avg_pooling(obs_encoding)
+        if self.obs_encoder._global_params.include_top:
+            obs_encoding = obs_encoding.flatten(start_dim=1)
+            obs_encoding = self.obs_encoder._dropout(obs_encoding)
+        obs_encoding = self.compress_obs_enc(obs_encoding)
+        obs_encoding = obs_encoding.unsqueeze(1)
+        obs_encoding = obs_encoding.reshape((self.context_size+1, -1, self.goal_encoding_size))
+        obs_encoding = torch.transpose(obs_encoding, 0, 1)
+
+        # Concat the obs encoding with the goal encoding
+        obs_encoding = torch.cat((obs_encoding, obsgoal_encoding), dim=1) 
         if len(obsgoal_encoding.shape) == 2:
             obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size
-        obs_encoding = obsgoal_encoding                
+        obs_encoding = obsgoal_encoding
+                   
         # Apply positional encoding 
         if self.positional_encoding:
             obs_encoding = self.positional_encoding(obs_encoding)

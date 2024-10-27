@@ -503,7 +503,6 @@ def train_lnp(
 
             obs_images = [transform(obs_image).to(device) for obs_image in obs_images]  
             batch_obs_images = torch.cat(obs_images, dim=1)
-            batch_obs_images = batch_obs_images.reshape((batch_obs_images.size(0)*batch_obs_images.size(1)//3, 3, batch_obs_images.size(2), batch_obs_images.size(3)))
             batch_obs_images = batch_obs_images.to(device)
             batch_goal_images = goal_image.to(device)
             batch_action_label = action_label.to(device)
@@ -705,7 +704,6 @@ def evaluate_lnp(
 
             obs_images = [transform(obs_image).to(device) for obs_image in obs_images]  
             batch_obs_images = torch.cat(obs_images, dim=1)
-            batch_obs_images = batch_obs_images.reshape((batch_obs_images.size(0)*batch_obs_images.size(1)//3, 3, batch_obs_images.size(2), batch_obs_images.size(3)))
             batch_obs_images = batch_obs_images.to(device)
             batch_goal_images = goal_image.to(device)
             batch_action_label = action_label.to(device)
@@ -895,7 +893,6 @@ def train_lnp_multimodal(
 
             obs_images = [transform(obs_image).to(device) for obs_image in obs_images]  
             batch_obs_images = torch.cat(obs_images, dim=1)
-            # batch_obs_images = batch_obs_images.reshape((, 3, batch_obs_images.size(2), batch_obs_images.size(3)))
             batch_obs_images = batch_obs_images.to(device)
             batch_goal_images = goal_image.to(device)
             batch_action_label = action_label.to(device)

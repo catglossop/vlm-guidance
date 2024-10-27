@@ -169,6 +169,7 @@ def main(args):
             vision_encoder = LNP_clip_FiLM(
                 obs_encoder=config["obs_encoder"],
                 obs_encoding_size=config["obs_encoding_size"],
+                lang_encoding_size=config["lang_encoding_size"],
                 context_size=config["context_size"],
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
@@ -184,7 +185,7 @@ def main(args):
             )
         noise_pred_net = ConditionalUnet1D(
                 input_dim=2,
-                global_cond_dim=config["encoding_size"]//2*(config["context_size"]+1),
+                global_cond_dim=config["encoding_size"],
                 down_dims=config["down_dims"],
                 cond_predict_scale=config["cond_predict_scale"],
             )
@@ -235,7 +236,6 @@ def main(args):
             output_1 = model(context.clone(), prompt_embedding_1).detach().cpu().numpy()
             output_2 = model(context.clone(), prompt_embedding_2).detach().cpu().numpy()
         elif config["model_type"] == "lnp":
-            context = context.reshape((-1, 3, 96, 96))
             output_1 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
             output_2 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
         elif config["model_type"] == "lnp_multi_modal":
