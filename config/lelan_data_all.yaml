@@ -4,7 +4,7 @@ run_name: lelan
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
 train: True
-batch_size: 128
+batch_size: 200
 epochs: 200
 gpu_ids: [0]
 num_workers: 12
@@ -23,7 +23,7 @@ seed: 0
 # model params
 model: lnp
 model_type: lnp
-clip_model_type: ViT-B/32
+language_encoder: google
 vision_encoder: lnp_clip_film
 efficientnet_model: efficientnet-b2
 encoding_size: 256

@@ -1,3 +1,6 @@
 [submodule "FiLM-pytorch"]
 	path = FiLM-pytorch
 	url = https://github.com/caffeinism/FiLM-pytorch.git
+[submodule "baselines/cow_baseline"]
+	path = baselines/cow_baseline
+	url = git@github.com:arjunbhorkar/cow_baseline.git
