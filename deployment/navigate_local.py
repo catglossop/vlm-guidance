@@ -264,12 +264,11 @@ class NavigateLocal(Node):
             self.naction = self.nactions[0] 
             self.chosen_waypoint = self.naction[self.args.waypoint] 
         elif self.model_type.split("_")[0] == "lelan":
-            context = self.obs_images.reshape((-1, 3, 96, 96))
             self.nactions = model_output_diffusion_eval(self.model, 
                                                        self.noise_scheduler, 
-                                                       context.clone(), 
+                                                       self.obs_images.clone(), 
                                                        self.clip_language_embedding.clone(), 
-                                                       context[0,...].clone(),
+                                                       self.obs_images[0,...].clone(),
                                                        self.model_params["len_traj_pred"], 
                                                        2, 
                                                        self.num_samples, 
