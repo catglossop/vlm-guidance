@@ -217,7 +217,7 @@ def main(config):
             )
         noise_pred_net = ConditionalUnet1D(
                 input_dim=2,
-                global_cond_dim=config["encoding_size"],
+                global_cond_dim=config["encoding_size"]*2,
                 down_dims=config["down_dims"],
                 cond_predict_scale=config["cond_predict_scale"],
             )

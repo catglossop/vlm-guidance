@@ -198,6 +198,7 @@ class LNPMultiModal(nn.Module):
         obs_encoder: Optional[str] = "efficientnet-b0",
         obs_encoding_size: Optional[int] = 512,
         lang_encoding_size: Optional[int] = 512,
+        goal_mask_prob: Optional[float] = 0.5,
         mha_num_attention_heads: Optional[int] = 2,
         mha_num_attention_layers: Optional[int] = 2,
         mha_ff_dim_factor: Optional[int] = 4,
@@ -210,6 +211,7 @@ class LNPMultiModal(nn.Module):
         self.lang_encoding_size = lang_encoding_size
         self.goal_encoding_size = obs_encoding_size//4
         self.context_size = context_size
+        self.goal_mask_prob = goal_mask_prob
 
         # Initialize FiLM Model
         self.film_model = make_model(self.lang_encoding_size, 3*(self.context_size+1), 8, 128, self.goal_encoding_size)
@@ -254,11 +256,12 @@ class LNPMultiModal(nn.Module):
         self.sa_encoder = nn.TransformerEncoder(self.sa_layer, num_layers=mha_num_attention_layers)
 
         # Definition of the goal mask (convention: 0 = no mask, 1 = mask)
-        self.goal_mask = torch.zeros((1, self.context_size + 2), dtype=torch.bool)
-        self.goal_mask[:, -1] = True # Mask out the goal 
-        self.no_mask = torch.zeros((1, self.context_size + 2), dtype=torch.bool) 
-        self.all_masks = torch.cat([self.no_mask, self.goal_mask], dim=0)
-        self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.goal_mask.float()) * ((self.context_size + 2)/(self.context_size + 1))], dim=0)
+        self.langgoal_mask = torch.zeros((1, self.context_size + 3), dtype=torch.bool)
+        self.imagegoal_mask = torch.zeros((1, self.context_size + 3), dtype=torch.bool)
+        self.no_mask = torch.zeros((1, self.context_size + 3), dtype=torch.bool) # Mask out neither goal
+        self.langgoal_mask[:, -1] = True # Mask out the language goal
+        self.imagegoal_mask[:, -2] = True # Mask out the image goal 
+        self.all_masks = torch.cat([self.no_mask, self.imagegoal_mask, self.langgoal_mask], dim=0)
 
     def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, feat_text: torch.tensor):
         # Get the image goal encoding
@@ -290,16 +293,22 @@ class LNPMultiModal(nn.Module):
         obs_encoding = obs_encoding.unsqueeze(1)
         obs_encoding = obs_encoding.reshape((self.context_size+1, -1, self.goal_encoding_size))
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
+        # Create the goal_mask: 0 = no mask, 1 = mask
+        goal_mask = torch.zeros((1, self.context_size + 2), dtype=torch.bool)
         obs_encoding = torch.cat((obs_encoding, obslang_encoding, obsgoal_encoding), dim=1)  
         if len(obsgoal_encoding.shape) == 2:
             obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size
         obs_encoding = obsgoal_encoding    
 
+        # If a goal mask is provided 
         # Apply positional encoding 
         if self.positional_encoding:
             obs_encoding = self.positional_encoding(obs_encoding)
         obs_encoding_tokens = self.sa_encoder(obs_encoding)
+        is src_key_padding_mask is not None:
+            avg_mask = torch.index_select(self.avg_pool_mask.to(device, dtype=torch.bool), 0, no_goal_mask).unsqueeze(-1)
+            obs_encoding_tokens = obs_encoding_tokens * avg_mask
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
         return obs_encoding_tokens
 
@@ -381,7 +390,7 @@ class LNP_clip_FiLM(nn.Module):
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
 
         # Concat the obs encoding with the goal encoding
-        obs_encoding = torch.cat((obs_encoding, obsgoal_encoding), dim=1) 
+        obs_encoding = torch.cat((obs_encoding, (obsgoal_encoding)*5), dim=1) 
         if len(obsgoal_encoding.shape) == 2:
             obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size
@@ -392,7 +401,7 @@ class LNP_clip_FiLM(nn.Module):
             obs_encoding = self.positional_encoding(obs_encoding)
         obs_encoding_tokens = self.sa_encoder(obs_encoding)
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
-        return obs_encoding_tokens
+        return obs_encoding_tokens, obsgoal_encoding.squeeze(1)
 
 # Utils for Group Norm
 def replace_bn_with_gn(

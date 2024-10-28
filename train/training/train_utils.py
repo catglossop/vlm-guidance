@@ -510,9 +510,9 @@ def train_lnp(
             action_mask = action_mask.to(device)
         
             B = obs_image.size(0)
-
-            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding)
-
+            goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
+            obsgoal_cond, film_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
+            cond = torch.cat([obsgoal_cond, film_cond], dim=1)
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
             naction = from_numpy(ndeltas).to(device)
@@ -569,7 +569,8 @@ def train_lnp(
                             
                 # Predict the noise residual
                 obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
-                noise_pred = model("noise_pred_net", sample=noisy_action, timestep=timesteps, global_cond=obsgoal_cond)
+                
+                noise_pred = model("noise_pred_net", sample=noisy_action, timestep=timesteps, global_cond=cond)
 
                 def action_reduce(unreduced_loss: torch.Tensor):
                     # Reduce over non-batch dimensions to get loss per batch element
@@ -712,7 +713,7 @@ def evaluate_lnp(
         
             B = obs_image.size(0)
 
-            obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding)
+            obsgoal_cond, film_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding)
 
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
@@ -761,7 +762,8 @@ def evaluate_lnp(
             
                 # Predict the noise residual
                 obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
-                noise_pred = ema_model("noise_pred_net", sample=noisy_actions, timestep=timesteps, global_cond=obsgoal_cond)
+                cond = torch.cat([obsgoal_cond, film_cond], dim=1)
+                noise_pred = ema_model("noise_pred_net", sample=noisy_actions, timestep=timesteps, global_cond=cond)
 
             if i % print_log_freq == 0 and print_log_freq != 0:
                 losses = _compute_losses(
@@ -901,8 +903,8 @@ def train_lnp_multimodal(
             distance = distance.float().to(device)
         
             B = obs_image.size(0)
-
-            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding)
+            goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
+            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
 
 
             deltas = get_delta(action_label)
@@ -1103,8 +1105,8 @@ def evaluate_lnp_multimodal(
             distance = distance.to(device)
         
             B = obs_image.size(0)
-
-            obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding)
+            goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
+            obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
 
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
@@ -1259,10 +1261,13 @@ def model_output_diffusion(
     batch_size: int,
     device: torch.device,
 ):
-    obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings)
+    
+    obsgoal_cond, film_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=goal_mask)
     obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
+    film_cond = film_cond.repeat_interleave(num_samples, dim=0)
 
+    cond = torch.cat([obsgoal_cond, film_cond], dim=1)
     # initialize action from Gaussian noise
     noisy_diffusion_output = torch.randn(
         (batch_size, pred_horizon, action_dim), device=device)
@@ -1273,7 +1278,7 @@ def model_output_diffusion(
             "noise_pred_net",
             sample=diffusion_output,
             timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
-            global_cond=obsgoal_cond
+            global_cond=cond
         )
         # inverse diffusion step (remove noise)
         diffusion_output = noise_scheduler.step(
@@ -1301,27 +1306,28 @@ def model_output_diffusion_eval(
     batch_size: int,
     device: torch.device,
 ):
-    if batch_obs_images is not None:
+    if batch_goal_images is not None:
         obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings)
         obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
         obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
     else:
-        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=batch_lang_embeddings)
+        obsgoal_cond, film_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=batch_lang_embeddings)
         obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
-        obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)  
+        obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
+        film_cond = film_cond.repeat_interleave(num_samples, dim=0)  
 
     # initialize action from Gaussian noise
     noisy_diffusion_output = torch.randn(
         (num_samples, pred_horizon, action_dim), device=device)
     diffusion_output = noisy_diffusion_output
-
+    cond = torch.cat([obsgoal_cond, film_cond], dim=1)
     for k in noise_scheduler.timesteps[:]:
         # predict noise
         noise_pred = model(
             "noise_pred_net",
             sample=diffusion_output,
             timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
-            global_cond=obsgoal_cond
+            global_cond=cond
         )
         # inverse diffusion step (remove noise)
         diffusion_output = noise_scheduler.step(
