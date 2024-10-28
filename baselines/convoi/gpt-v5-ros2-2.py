@@ -12,6 +12,8 @@ import csv
 import copy
 import time
 import string
+import argparse
+import os
 from bresenham import bresenham  # to calculate the lines connecting two grid points
 from transformers import CLIPProcessor, CLIPModel
 
@@ -19,31 +21,40 @@ from transformers import CLIPProcessor, CLIPModel
 # import rospy
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 
 from std_msgs.msg import Float32, Float32MultiArray
 from cv_bridge import CvBridge, CvBridgeError
 from geometry_msgs.msg import Twist, PointStamped, Pose, PoseArray
 from nav_msgs.msg import OccupancyGrid, Odometry
-from sensor_msgs.msg import LaserScan, CompressedImage
+from sensor_msgs.msg import LaserScan, CompressedImage, Image
 # from tf.transformations import euler_from_quaternion
 from tf_transformations import euler_from_quaternion
 
 # Headers for local costmap subscriber
 from matplotlib import pyplot as plt
 from matplotlib.path import Path
-from PIL import Image, ImageChops
+from PIL import Image as PILImage
+from PIL import ImageChops
+from openai import OpenAI
 
 # OpenCV
 import cv2
 
+OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
+ORGANIZATION_ID = os.environ.get("ORGANIZATION_ID")
 
 class Img2ground(Node):
 
     def __init__(self):
 
-        # rospy.init_node('ground2_img')
         super().__init__('ground2_img')
+        self.path_prompt = "prompts/baseline.txt"
+        with open(self.path_prompt, "r") as f:
+            self.prompt = f.read()
 
+        self.client = OpenAI(api_key=OPENAI_KEY,
+                    organization=ORGANIZATION_ID)
         self.robot_radius = 0.6  # [m]
         self.x = 0.0
         self.y = 0.0
@@ -53,19 +64,22 @@ class Img2ground(Node):
         self.goalX = 0.0006
         self.goalY = 0.0006
         self.th = 0.0
-        # self.r = rospy.Rate(20)
-        # ROS2 doesn't have Rate in the same way; we'll use a timer instead.
 
         # Params for Create 3
-        self.camera_height = 0.95  # height of the camera w.r.t. the robot's base/ground level
-        self.camera_tilt_angle = 5.0
+        self.robot_qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT, 
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1
+            )
+        self.camera_height = 0.75  # height of the camera w.r.t. the robot's base/ground level
+        self.camera_tilt_angle = 0
         self.camera_offset_x = 0
-        self.camera_offset_y = 0.05  # camera y axis offset in meters
-        self.P = [[529.3150024414062, 0.0, 628.6900024414062, 0.0],
-                  [0.0, 529.239990234375, 360.8070068359375, 0.0],
-                  [0.0, 0.0, 1.0, 0.0]]  # Zed2i No. 1 camera left_raw
-        # self.subOdom = rospy.Subscriber("/odom", Odometry, self.odom_callback)
-        self.subOdom = self.create_subscription(Odometry, "/odom", self.odom_callback, 10)
+        self.camera_offset_y = 0  # camera y axis offset in meters
+        self.P = [[393.6538, 0.0, 322.797939, 0.0], 
+                  [0.0, 393.6538, 241.090902, 0.0],
+                  [0.0, 0.0, 1.0, 0.0]]
+        self.subOdom = self.create_subscription(Odometry, "/odom", self.odom_callback, self.robot_qos_profile)
         self.row_distance_locations = np.array([2, 3.5, 5])  # For checking occupancy
         self.point_spacing = 0.5  # in m  # For Adding Markers
 
@@ -79,16 +93,13 @@ class Img2ground(Node):
         self.scale_percent = 300  # percent of original size
         self.costmap_shape = (200, 200)
         self.costmap_resolution = 0.05
-        # self.costmap_baselink_high = np.zeros(self.costmap_shape, dtype=np.uint8)
-        # self.costmap_baselink_mid = np.zeros(self.costmap_shape, dtype=np.uint8)
-        # self.costmap_baselink_low = np.zeros(self.costmap_shape, dtype=np.uint8)
 
-        self.occupancymap_low = np.zeros(self.costmap_shape, dtype=np.uint8)
+        # self.occupancymap_low = np.zeros(self.costmap_shape, dtype=np.uint8)
         self.occupancymap_mid = np.zeros(self.costmap_shape, dtype=np.uint8)
-        self.occupancymap_high = np.zeros(self.costmap_shape, dtype=np.uint8)
-        self.occupancymap_low_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
+        # self.occupancymap_high = np.zeros(self.costmap_shape, dtype=np.uint8)
+        # self.occupancymap_low_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
         self.occupancymap_mid_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
-        self.occupancymap_diff_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
+        # self.occupancymap_diff_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
         self.kernel_size = (5, 5)  # for glass #(11, 11) for everything else
 
         self.roi_shape = (100, 100)
@@ -99,55 +110,52 @@ class Img2ground(Node):
         self.flag = 0
         self.counter = 0
 
-        self.intmap_rgb = cv2.cvtColor(self.occupancymap_low, cv2.COLOR_GRAY2RGB)
-        self.obs_low_mid_high = np.argwhere(self.occupancymap_low > 150)  # should be null set
+        self.intmap_rgb = cv2.cvtColor(self.occupancymap_mid, cv2.COLOR_GRAY2RGB)
+        # self.obs_low_mid_high = np.argwhere(self.occupancymap_mid > 150)  # should be null set
 
         # For cost map clearing
         self.height_thresh = 75  # 150
-        self.occupancy_thresh = 50
+        self.occupancy_thresh = 150
         self.alpha = 0.35
 
         # Subscribers and Publishers
-        # self.subGoal = rospy.Subscriber('/final_goal', Twist, self.target_callback)
         self.subGoal = self.create_subscription(Twist, '/final_goal', self.target_callback, 10)
-        # self.pubRefPath = rospy.Publisher('/reference_path', PoseArray, queue_size=10)
         self.pubRefPath = self.create_publisher(PoseArray, '/reference_path', 10)
-        # self.pubGoal = rospy.Publisher('/target/position', Twist, queue_size=10)
         self.pubGoal = self.create_publisher(Twist, '/target/position', 10)
-        # self.subOccupancy = rospy.Subscriber("/intensity_map_mid", OccupancyGrid, self.occupancy_map_mid_cb)
-        # self.subOccupancy = self.create_subscription(OccupancyGrid, "/intensity_map_mid", self.occupancy_map_mid_cb, 10)
-        # # self.subImg = rospy.Subscriber("/zed2i/zed_node/left_raw/image_raw_color/compressed", CompressedImage, self.img_callback)
-        # self.subImg = self.create_subscription(CompressedImage, "/zed2i/zed_node/left_raw/image_raw_color/compressed", self.img_callback, 10)
-        # self.occupancy_received = False
+        self.subOccupancy = self.create_subscription(OccupancyGrid, "/costmap/costmap", self.occupancy_map_mid_cb, 10)
+        self.subImg = self.create_subscription(Image, "front/image_raw", self.img_callback, 10)
+        self.occupancy_received = False
 
         # VLM Parameters
         api_key = self.open_file("gamma_api.txt")  # OpenAI API Key
+        print(api_key)
         self.headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
 
         self.marked_img = None
         self.ref_path_odom = []
         self.ref_path_img = []
         self.reprompt_thresh = 4  # in m
-        self.context_prompt = self.open_file("../prompts/context.txt")
+        self.context_prompt = self.open_file("prompts/context.txt")
         self.context_curr = None
         self.context_prev = None
         self.path_prompt = None
         self.initial = True
         self.prompted = False
+        os.makedirs("images", exist_ok=True)
 
         # CLIP for context understanding
         self.clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
         self.clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
         # Goal direction condition
-        self.goal_dir_max = 60  # degrees
+        self.goal_dir_max = 1000 # degrees
 
         # print("GPT Script Started!")
         self.get_logger().info("GPT Script Started!")
         self.publish_goal = 1  # input("Publish final goal to planner? 1-yes, 0-no. ")
 
         # Timer to periodically call get_ref_path
-        self.timer_period = 0.1  # seconds
+        self.timer_period = 0.5  # seconds
         self.timer = self.create_timer(self.timer_period, self.get_ref_path)
 
     # Functions related to VLM
@@ -199,32 +207,33 @@ class Img2ground(Node):
         # self.goalX = data.linear.x
         # self.goalY = data.linear.y
 
-    # def img_callback(self, msg):
-    #     self.cv_image = self.br.compressed_imgmsg_to_cv2(msg)  # for compressed images
-    #     self.img_h, self.img_w, _ = np.shape(self.cv_image)
-    #     self.image_received = True
+    def img_callback(self, msg):
+        self.cv_image = self.br.imgmsg_to_cv2(msg, "rgb8")  # for images
+        self.img_h, self.img_w, _ = np.shape(self.cv_image)
+        self.image_received = True
 
-    # def occupancy_map_mid_cb(self, msg):
-    #     self.occupancymap_mid_inflated = self.process_costmap(msg)
-    #     self.occupancy_received = True
+    def occupancy_map_mid_cb(self, msg):
+        self.occupancymap_mid_inflated = self.process_costmap(msg)
+        self.occupancy_received = True
 
     # Process the occupancy map
     def process_costmap(self, data):
         # Mid occupancy Map
         int_mid = np.reshape(data.data, (-1, int(math.sqrt(len(data.data)))))
         int_mid = np.reshape(data.data, (int(math.sqrt(len(data.data))), -1))
-        int_mid = np.rot90(np.fliplr(int_mid), 1, (1, 0)) + 128  # Shift the range from [-128,128] to [0,256]
+        int_mid = np.flip(int_mid, axis=0)
+        # int_mid = np.rot90(np.fliplr(int_mid), 1, (1, 0)) + 128  # Shift the range from [-128,128] to [0,256]
 
-        im_mid_image = Image.fromarray(np.uint8(int_mid))
-        yaw_deg = 0  # Now cost map published wrt baselink
+        im_mid_image = PILImage.fromarray(np.uint8(int_mid))
+        yaw_deg = -90  # Now cost map published wrt baselink
         im_mid_pil = im_mid_image.rotate(-yaw_deg)
         self.occupancymap_mid = np.array(im_mid_pil)
-        self.occupancymap_mid = np.rot90(np.uint8(self.occupancymap_mid), 2)  # Rotating by 180 deg
+        # self.occupancymap_mid = np.rot90(np.uint8(self.occupancymap_mid), 2)  # Rotating by 180 deg
 
         # Inflation
         kernel = np.ones(self.kernel_size, np.uint8)
         dilated_mid = cv2.dilate(self.occupancymap_mid, kernel, iterations=1)
-        # self.occupancymap_mid_inflated = np.array(dilated_mid)
+        self.occupancymap_mid_inflated = np.array(dilated_mid)
 
         return np.array(dilated_mid)
 
@@ -298,13 +307,12 @@ class Img2ground(Node):
         x_list_odom, y_list_odom = self.robot_to_odom(np.array(x_list), np.array(y_list))  # Coordinates w.r.t. odom frame
         odom_coord_list = np.column_stack((x_list_odom, y_list_odom))
         map_coord_list = np.column_stack((cm_col, cm_row))
-
         occ_map = cv2.cvtColor(self.occupancymap_mid_inflated, cv2.COLOR_GRAY2RGB)
         occ_map = cv2.circle(occ_map, (int(self.costmap_shape[0]/2), int(self.costmap_shape[0]/2)), radius=5, color=(255, 255,0), thickness=-1)
         for l in range(len(x_list)):
             occ_map = cv2.circle(occ_map, (cm_col[l], cm_row[l]), radius=5, color=(0, 255, 255), thickness=-1)
 
-        # cv2.imshow("Occupancy Map:", cv2.resize(occ_map, (600,600), interpolation = cv2.INTER_AREA))
+        cv2.imwrite("images/map.png", cv2.resize(occ_map, (600,600), interpolation = cv2.INTER_AREA))
 
         return x_list, y_list, odom_coord_list, map_coord_list
 
@@ -424,24 +432,24 @@ class Img2ground(Node):
         return [c for c in a if c.isalpha()] == [c for c in b if c.isalpha()]
 
     # Choose the appropriate prompt based on context
-    def choose_prompt(self, context):
-        if self.compare_strings(context.lower(), 'indoor corridor'):
-            self.get_logger().info("Context is indoor corridor.")
-            self.path_prompt = self.open_file("../prompts/corridor.txt")
+    # def choose_prompt(self, context):
+    #     if self.compare_strings(context.lower(), 'indoor corridor'):
+    #         self.get_logger().info("Context is indoor corridor.")
+    #         self.path_prompt = self.open_file("prompts/corridor.txt")
 
-        elif self.compare_strings(context.lower(), 'outdoor terrain'):
-            self.get_logger().info("Context is outdoor terrain.")
-            self.path_prompt = self.open_file("../prompts/outdoor_terrain.txt")
+    #     elif self.compare_strings(context.lower(), 'outdoor terrain'):
+    #         self.get_logger().info("Context is outdoor terrain.")
+    #         self.path_prompt = self.open_file("prompts/outdoor_terrain.txt")
 
-        elif self.compare_strings(context.lower(), 'crosswalk'):
-            self.get_logger().info("Context is crosswalk.")
-            self.path_prompt = self.open_file("../prompts/crosswalk.txt")
+    #     elif self.compare_strings(context.lower(), 'crosswalk'):
+    #         self.get_logger().info("Context is crosswalk.")
+    #         self.path_prompt = self.open_file("prompts/crosswalk.txt")
 
-        elif self.compare_strings(context.lower(), 'scenario with people'):
-            self.get_logger().info("Context is scenario with interacting people.")
-            self.path_prompt = self.open_file("../prompts/social1.txt")
+    #     elif self.compare_strings(context.lower(), 'scenario with people'):
+    #         self.get_logger().info("Context is scenario with interacting people.")
+    #         self.path_prompt = self.open_file("prompts/social1.txt")
 
-        return self.path_prompt
+    #     return self.path_prompt
 
     # Use CLIP to determine context
     def ask_clip(self, image):
@@ -465,54 +473,38 @@ class Img2ground(Node):
 
     # Ask GPT for reference path
     def ask_gpt(self, base64_image, prompt, context_checking):
-        payload = {
-            "model": "gpt-4-vision-preview",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": prompt
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}"
-                            }
-                        }
-                    ]
-                }
-            ],
-            "max_tokens": 1000
-        }
-
+        message = [{"role": "user",
+                   "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", 
+                         "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"},
+                },
+                ],
+                },
+                ]
         t1 = time.time()
-        response = requests.post("https://api.openai.com/v1/chat/completions", headers=self.headers, json=payload)
+        response = self.client.chat.completions.create(
+            model="gpt-4o",
+            messages=message,
+            max_tokens=1000,
+        )
         t2 = time.time()
         self.get_logger().info(f"Inference time: {t2 - t1}")
 
-        # Check if the request was successful (status code 200)
-        if response.status_code == 200:
-            # Parse the JSON response
-            response_data = json.loads(response.text)
-            # Access the content
-            content = response_data['choices'][0]['message']['content']
+        content = response.choices[0].message.content
 
-            if context_checking:
-                # Print the content
-                self.get_logger().info("VLM: Checking the current context.")
-                return content
-
-            else:
-                # Obtain scores/points from GPT's response and print them
-                self.get_logger().info("VLM: Getting new points for reference path.")
-                points_list = ast.literal_eval(content)
-                self.get_logger().info(f"Points from VLM: {points_list}")
-                return points_list
+        if context_checking:
+            # Print the content
+            self.get_logger().info("VLM: Checking the current context.")
+            return content
 
         else:
-            self.get_logger().error(f"Request failed with status code: {response.status_code}")
+            # Obtain scores/points from GPT's response and print them
+            self.get_logger().info("VLM: Getting new points for reference path.")
+            points_list = ast.literal_eval(content)
+            self.get_logger().info(f"Points from VLM: {points_list}")
+            return points_list
+
 
     # Construct the reference path
     def construct_ref_path_2(self, marked_img, points_list, row_id, img_markers, final_image_coords, final_odom_coords, final_map_coords):
@@ -524,8 +516,7 @@ class Img2ground(Node):
         if isinstance(points_list, list):
             final_list = points_list
         else:
-            final_list = [points_list]
-
+            final_list = list(points_list)
         st = set(final_list)
         idx = [i for i, e in enumerate(img_markers) if e in st]
 
@@ -533,7 +524,6 @@ class Img2ground(Node):
             ref_path_img.append([final_image_coords[i][0], final_image_coords[i][1]])
             ref_path_odom.append([final_odom_coords[i][0], final_odom_coords[i][1]])
             ref_path_costmap.append([final_map_coords[i][0], final_map_coords[i][1]])
-
         # Publish reference path wrt odom
         ref_path = PoseArray()
         for i in range(len(idx)):
@@ -542,7 +532,6 @@ class Img2ground(Node):
             goal.position.y = ref_path_odom[i][1]
             goal.orientation.w = 1.0
             ref_path.poses.append(goal)
-
         self.pubRefPath.publish(ref_path)
 
         return ref_path_odom, ref_path_img
@@ -550,6 +539,10 @@ class Img2ground(Node):
     # Get the reference path
     def get_ref_path(self):
         if not self.image_received or not self.occupancy_received:
+            if not self.image_received:
+                print("waiting for image")
+            if not self.occupancy_received:
+                print("waiting for map")
             return
 
         # Add markers to image
@@ -561,7 +554,7 @@ class Img2ground(Node):
         self.get_logger().info(f"Image size: {img_h}, {img_w}")
 
         # Encode the marked image
-        image_path = '../../images/test/' + '1.jpg'
+        image_path =  'images/1.jpg'
         cv2.imwrite(image_path, marked_img_resized)
         base64_image = self.encode_image(image_path)
 
@@ -584,16 +577,19 @@ class Img2ground(Node):
             # Check context and query VLM for reference path
             if self.initial:
                 self.initial = False
-                self.context_curr = self.ask_clip(self.marked_img)
-                path_prompt = self.choose_prompt(self.context_curr)
-                points_list = self.ask_gpt(base64_image, path_prompt, False)
+                points_list = self.ask_gpt(base64_image, self.prompt, False)
+                print("Initial gpt points list: ", points_list)
                 self.ref_path_odom, self.ref_path_img = self.construct_ref_path_2(self.marked_img, points_list, row_id,
                                                                                  img_markers, final_image_coords,
                                                                                  final_odom_coords, final_map_coords)
+                print("Ref path: ", self.ref_path_odom)
+                self.goalX = 10.0
+                self.goalY = 0.0
                 self.context_prev = self.context_curr
                 self.prompted = True
 
             elif not self.initial and len(self.ref_path_odom) > 0:
+
                 dist_to_ref_point = np.linalg.norm(np.array([self.x, self.y]) - np.array(
                     [self.ref_path_odom[0][0], self.ref_path_odom[0][1]]))
                 self.get_logger().info(f"Dist from current ref path point: {dist_to_ref_point}")
@@ -602,35 +598,19 @@ class Img2ground(Node):
                     self.prompted = False
 
                 if not self.prompted and dist_to_ref_point < self.reprompt_thresh:
-                    self.context_curr = self.ask_clip(self.marked_img)
-                    if self.context_curr == self.context_prev:
-                        self.get_logger().info("Context remains the same")
-                        path_prompt = self.choose_prompt(self.context_curr)
-                        points_list = self.ask_gpt(base64_image, path_prompt, False)
-                        self.ref_path_odom, self.ref_path_img = self.construct_ref_path_2(self.marked_img, points_list,
-                                                                                         row_id, img_markers,
-                                                                                         final_image_coords,
-                                                                                         final_odom_coords,
-                                                                                         final_map_coords)
-                        self.context_prev = self.context_curr
-                        self.prompted = True
+                    self.get_logger().info("Context remains the same")
+                    points_list = self.ask_gpt(base64_image, self.prompt, False)
+                    self.ref_path_odom, self.ref_path_img = self.construct_ref_path_2(self.marked_img, points_list,
+                                                                                        row_id, img_markers,
+                                                                                        final_image_coords,
+                                                                                        final_odom_coords,
+                                                                                        final_map_coords)
+                    self.context_prev = self.context_curr
+                    self.prompted = True
 
-                        self.get_logger().info("Got new reference path!")
-                        self.get_logger().info(f"Dist from current ref path point: {dist_to_ref_point}")
+                    self.get_logger().info("Got new reference path!")
+                    self.get_logger().info(f"Dist from current ref path point: {dist_to_ref_point}")
 
-                    else:
-                        path_prompt = self.choose_prompt(self.context_curr)
-                        points_list = self.ask_gpt(base64_image, path_prompt, False)
-                        self.ref_path_odom, self.ref_path_img = self.construct_ref_path_2(self.marked_img, points_list,
-                                                                                         row_id, img_markers,
-                                                                                         final_image_coords,
-                                                                                         final_odom_coords,
-                                                                                         final_map_coords)
-                        self.context_prev = self.context_curr
-                        self.prompted = True
-
-                        self.get_logger().info("Got new reference path!")
-                        self.get_logger().info(f"Dist from current ref path point: {dist_to_ref_point}")
 
             elif not self.initial and len(self.ref_path_odom) == 0:
                 self.get_logger().info("No reference path obtained.")
@@ -640,14 +620,14 @@ class Img2ground(Node):
                 for i in range(len(self.ref_path_img) - 1):
                     cv2.line(self.marked_img, tuple(self.ref_path_img[i]), tuple(self.ref_path_img[i + 1]), (0, 255, 0), 3)
 
-            cv2.imshow("Img with points", self.marked_img)
-            cv2.waitKey(1)
+            cv2.imwrite("images/img_with_points.png", self.marked_img)
 
         else:
             self.get_logger().info("Goal outside FOV! No reference path published.")
-
+        print(f"GOAL: {self.goalX} {self.goalY}")
         # Publish final goal to robot
-        if self.publish_goal == 1 and self.goalX != 0.0006 and self.goalY != 0.0006:
+        if self.publish_goal == 1 and (self.goalX != 0.0006) and (self.goalY != 0.0006):
+            print("publishing goal")
             final_goal = Twist()
             final_goal.linear.x = self.goalX
             final_goal.linear.y = self.goalY

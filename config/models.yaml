@@ -1,3 +1,6 @@
+nomad: 
+  config_path: "../../config/nomad.yaml"
+  ckpt_path: "../../deployment/model_weights/nomad.pth"
 rft: 
   config_path: "../config/rft.yaml"
   ckpt_path: "model_weights/rft.pth"
@@ -45,5 +48,29 @@ lelan_v4_ckpt_10:
 lelan_v4_ckpt_15: 
   config_path: "../config/lelan_v4.yaml"
   ckpt_path: "model_weights/lelan_v4_ckpt_15.pth"
+
+lelan_v5_ckpt_20:
+  config_path: "../config/lelan_v5.yaml"
+  ckpt_path: "model_weights/lelan_v5_ckpt_20.pth"
+
+lelan_v5_ckpt_40:
+  config_path: "../config/lelan_v5.yaml"
+  ckpt_path: "model_weights/lelan_v5_ckpt_40.pth"
+
+lelan_v5_ckpt_60:
+  config_path: "../config/lelan_v5.yaml"
+  ckpt_path: "model_weights/lelan_v5_ckpt_60.pth"
+
+lelan_v6_ckpt_30:
+  config_path: "../config/lelan_v6.yaml"
+  ckpt_path: "model_weights/lelan_v6_ckpt_30.pth"
+
+lelan_v6_ckpt_50:
+  config_path: "../config/lelan_v6.yaml"
+  ckpt_path: "model_weights/lelan_v6_ckpt_50.pth"
+
+lelan_v6_ckpt_70:
+  config_path: "../config/lelan_v6.yaml"
+  ckpt_path: "model_weights/lelan_v6_ckpt_70.pth"
 
 # add your own model configs here after saving the *.pth file to ../model_weight

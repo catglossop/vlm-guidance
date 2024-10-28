@@ -34,6 +34,7 @@ from nav_msgs.msg import OccupancyGrid, Odometry
 import sensor_msgs.msg
 from sensor_msgs.msg import LaserScan, CompressedImage
 from tf_transformations import euler_from_quaternion
+from rclpy.qos import QoSProfile, ReliabilityPolicy, HistoryPolicy, DurabilityPolicy
 import time
 import sys
 import csv
@@ -100,18 +101,18 @@ class Config():
         self.costmap_resolution = 0.05
         print("MIM Started!")
         
-        self.intensitymap_low = np.zeros(self.costmap_shape, dtype=np.uint8)
+        # self.intensitymap_low = np.zeros(self.costmap_shape, dtype=np.uint8)
         self.intensitymap_mid = np.zeros(self.costmap_shape, dtype=np.uint8)
-        self.intensitymap_high = np.zeros(self.costmap_shape, dtype=np.uint8)
-        self.intensitymap_low_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
+        # self.intensitymap_high = np.zeros(self.costmap_shape, dtype=np.uint8)
+        # self.intensitymap_low_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
         self.intensitymap_mid_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
-        self.intensitymap_diff_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
+        # self.intensitymap_diff_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
         self.glass_costmap = np.zeros(self.costmap_shape, dtype=np.uint8)
         self.glass_costmap_inflated = np.zeros(self.costmap_shape, dtype=np.uint8)
         self.planning_costmap = np.zeros(self.costmap_shape, dtype=np.uint8)
         self.viz_costmap = cv2.cvtColor(self.glass_costmap, cv2.COLOR_GRAY2RGB)
         self.viz_costmap_inflated = cv2.cvtColor(self.glass_costmap_inflated, cv2.COLOR_GRAY2RGB)
-        self.obs_low_mid_high = np.argwhere(self.intensitymap_low > 150) # should be null set
+        # self.obs_low_mid_high = np.argwhere(self.intensitymap_low > 150) # should be null set
         self.kernel_size = (9, 9) # for glass #(11, 11) for everything else
         
         self.roi_shape = (100, 100)
@@ -194,48 +195,51 @@ class Config():
                 self.y_ref_odom.append(data.poses[i].position.y)
 
             self.waypoint_curr = self.ref_path[len(data.poses)-1] # Choose the closest point as first waypoint
+            print("WAYPOINT: ", self.waypoint_curr)
         else:
             self.ref_path = []
             self.x_ref_odom = []
             self.y_ref_odom = []
             self.waypoint_curr = None
 
-    def intensity_map_low_cb(self, data_low):
-        # Obtain lower intensity map
-        int_low = np.reshape(data_low.data, (-1, int(math.sqrt(len(data_low.data)))))
-        int_low = np.reshape(data_low.data, (int(math.sqrt(len(data_low.data))), -1))
-        int_low = np.rot90(np.fliplr(int_low), 1, (1, 0)) + 128  # Added +128 to shift the range from [-128,128] to [0,256]
+    # def intensity_map_low_cb(self, data_low):
+    #     # Obtain lower intensity map
+    #     int_low = np.reshape(data_low.data, (-1, int(math.sqrt(len(data_low.data)))))
+    #     int_low = np.reshape(data_low.data, (int(math.sqrt(len(data_low.data))), -1))
+    #     int_low = np.rot90(np.fliplr(int_low), 1, (1, 0)) + 128  # Added +128 to shift the range from [-128,128] to [0,256]
 
-        im_low_image = Image.fromarray(np.uint8(int_low))
-        yaw_deg = 0 # Now cost map published wrt baselink
-        im_low_pil = im_low_image.rotate(-yaw_deg)
-        self.intensitymap_low = np.array(im_low_pil)
-        self.intensitymap_low = np.rot90(np.uint8(self.intensitymap_low), 2)
+    #     im_low_image = Image.fromarray(np.uint8(int_low))
+    #     yaw_deg = 0 # Now cost map published wrt baselink
+    #     im_low_pil = im_low_image.rotate(-yaw_deg)
+    #     self.intensitymap_low = np.array(im_low_pil)
+    #     self.intensitymap_low = np.rot90(np.uint8(self.intensitymap_low), 2)
 
-    def intensity_map_high_cb(self, data_high):
-        # Obtain higher intensity map
-        int_high = np.reshape(data_high.data, (-1, int(math.sqrt(len(data_high.data)))))
-        int_high = np.reshape(data_high.data, (int(math.sqrt(len(data_high.data))), -1))
-        int_high = np.rot90(np.fliplr(int_high), 1, (1, 0)) + 128  # Added +128 to shift the range from [-128,128] to [0,256]
+    # def intensity_map_high_cb(self, data_high):
+    #     # Obtain higher intensity map
+    #     int_high = np.reshape(data_high.data, (-1, int(math.sqrt(len(data_high.data)))))
+    #     int_high = np.reshape(data_high.data, (int(math.sqrt(len(data_high.data))), -1))
+    #     int_high = np.rot90(np.fliplr(int_high), 1, (1, 0)) + 128  # Added +128 to shift the range from [-128,128] to [0,256]
 
-        im_high_image = Image.fromarray(np.uint8(int_high))
-        yaw_deg = 0 # Now cost map published wrt baselink
-        im_high_pil = im_high_image.rotate(-yaw_deg)
-        self.intensitymap_high = np.array(im_high_pil)
-        self.intensitymap_high = np.rot90(np.uint8(self.intensitymap_high), 2)
+    #     im_high_image = Image.fromarray(np.uint8(int_high))
+    #     yaw_deg = 0 # Now cost map published wrt baselink
+    #     im_high_pil = im_high_image.rotate(-yaw_deg)
+    #     self.intensitymap_high = np.array(im_high_pil)
+    #     self.intensitymap_high = np.rot90(np.uint8(self.intensitymap_high), 2)
 
     # Callback for MID intensity map
     def intensity_map_mid_cb(self, data):
+        print("Got occupancy grid")
         # Mid Intensity Map
         int_mid = np.reshape(data.data, (-1, int(math.sqrt(len(data.data)))))
         int_mid = np.reshape(data.data, (int(math.sqrt(len(data.data))), -1))
-        int_mid = np.rot90(np.fliplr(int_mid), 1, (1, 0)) + 128  # Added +128 to shift the range from [-128,128] to [0,256]
+        int_mid = np.flip(int_mid, axis=0)
+        # int_mid = np.rot90(np.fliplr(int_mid), 1, (1, 0)) + 128  # Added +128 to shift the range from [-128,128] to [0,256]
 
         im_mid_image = Image.fromarray(np.uint8(int_mid))
-        yaw_deg = 0 # Now cost map published wrt baselink
+        yaw_deg = -90 # Now cost map published wrt baselink
         im_mid_pil = im_mid_image.rotate(-yaw_deg)
         self.intensitymap_mid = np.array(im_mid_pil)
-        self.intensitymap_mid = np.rot90(np.uint8(self.intensitymap_mid), 2) # Rotating by 180 deg
+        # self.intensitymap_mid = np.rot90(np.uint8(self.intensitymap_mid), 2) # Rotating by 180 deg
 
         self.glass_detect()
 
@@ -258,14 +262,14 @@ class Config():
 
         # Considering the ROI of the thresholded mid map and the raw low map
         intmap_mid_thresholded_roi = intmap_mid_thresholded[int(center_x-roi_side):int(center_x+roi_side), int(center_y-roi_side):int(center_y+roi_side)]
-        intmap_low_roi = self.intensitymap_low[int(center_x-roi_side):int(center_x+roi_side), int(center_y-roi_side):int(center_y+roi_side)]
+        # intmap_low_roi = self.intensitymap_low[int(center_x-roi_side):int(center_x+roi_side), int(center_y-roi_side):int(center_y+roi_side)]
 
         # Dilate the ROIs
         intmap_mid_thresholded_roi = cv2.dilate(intmap_mid_thresholded_roi, self.uniform_inflation_kernel, iterations=1)
-        intmap_low_roi = cv2.dilate(intmap_low_roi, self.uniform_inflation_kernel, iterations=1)
+        # intmap_low_roi = cv2.dilate(intmap_low_roi, self.uniform_inflation_kernel, iterations=1)
 
         # Remove all the objects in low ROI from the thresholded mid ROI (isolate the glass shadow)
-        intmap_mid_thresholded_roi[intmap_low_roi > 1] = 0
+        # intmap_mid_thresholded_roi[intmap_low_roi > 1] = 0
         
         # Convert the isolated glass shadow ROI to a binary image        
         _, glass_shadow_roi_bw = cv2.threshold(intmap_mid_thresholded_roi, self.intmap_mid_binary_thresh, 255, cv2.THRESH_BINARY)
@@ -306,8 +310,9 @@ class Config():
                 glass_shadow_cleaned = cv2.line(glass_shadow_cleaned, (int(line_pt1_roi[0]), int(line_pt1_roi[1])), (int(line_pt2_roi[0]), int(line_pt2_roi[1])), 255, thickness=self.line_thickness)
 
         # Update planning costmap
-        self.intensitymap_low[int(center_x-roi_side):int(center_x+roi_side), int(center_y-roi_side):int(center_y+roi_side)] = glass_shadow_cleaned + self.intensitymap_low[int(center_x-roi_side):int(center_x+roi_side), int(center_y-roi_side):int(center_y+roi_side)]
-        self.glass_costmap = self.intensitymap_low
+        # CHANGED TO MID
+        self.intensitymap_mid[int(center_x-roi_side):int(center_x+roi_side), int(center_y-roi_side):int(center_y+roi_side)] = glass_shadow_cleaned + self.intensitymap_mid[int(center_x-roi_side):int(center_x+roi_side), int(center_y-roi_side):int(center_y+roi_side)]
+        self.glass_costmap = self.intensitymap_mid
 
         # Visualization costmap
         self.viz_costmap = cv2.cvtColor(self.glass_costmap, cv2.COLOR_GRAY2RGB)
@@ -728,13 +733,18 @@ class DwaNode(Node):
         
         self.config = Config()
         self.obs = Obstacles()
-
+        self.robot_qos_profile = QoSProfile(
+            reliability=ReliabilityPolicy.BEST_EFFORT, 
+            history=HistoryPolicy.KEEP_LAST,
+            durability=DurabilityPolicy.VOLATILE,
+            depth=1
+            )
         # Subscriptions
         self.sub_odom = self.create_subscription(
             Odometry,
-            '/spot/odometry',
+            '/odom',
             self.assign_odom_coords_callback,
-            10)
+            self.robot_qos_profile)
         
         self.sub_laser = self.create_subscription(
             LaserScan,
@@ -776,8 +786,8 @@ class DwaNode(Node):
         # Publishers
         choice = input("Publish? 1 or 0")
         if(int(choice) == 1):
-            self.pub_cmd_vel = self.create_publisher(Twist, '/spot/cmd_vel', 10)
-            print("Publishing to /spot/cmd_vel")
+            self.pub_cmd_vel = self.create_publisher(Twist, '/cmd_vel', 1)
+            print("Publishing to /cmd_vel")
         else:
             self.pub_cmd_vel = self.create_publisher(Twist, '/dont_publish', 10)
             print("Not publishing!")
@@ -824,8 +834,8 @@ class DwaNode(Node):
 
     def timer_callback(self):
         # Main loop logic here, to be called every timer tick
-
         # Initial
+    
         if self.config.goalX == 0.0006 and self.config.goalY == 0.0006:
             self.speed.linear.x = 0.0
             self.speed.angular.z = 0.0

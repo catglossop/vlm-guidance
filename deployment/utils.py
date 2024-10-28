@@ -22,6 +22,8 @@ from prettytable import PrettyTable
 from model.model import ResNetFiLMTransformer
 from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM
 from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp
+from model.nomad.nomad import NoMaD, DenseNetwork
+from model.nomad.nomad_vint import NoMaD_ViNT
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from train.training.train_utils import replace_bn_with_gn, model_output_diffusion_eval
@@ -55,6 +57,7 @@ def load_model(
             vision_encoder = LNP_clip_FiLM(
                 obs_encoder=config["obs_encoder"],
                 obs_encoding_size=config["obs_encoding_size"],
+                lang_encoding_size=config["lang_encoding_size"],
                 context_size=config["context_size"],
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
@@ -69,7 +72,7 @@ def load_model(
             )
         noise_pred_net = ConditionalUnet1D(
                 input_dim=2,
-                global_cond_dim=config["encoding_size"]//2*(config["context_size"]+1),
+                global_cond_dim=config["encoding_size"],
                 down_dims=config["down_dims"],
                 cond_predict_scale=config["cond_predict_scale"],
             )
@@ -79,9 +82,46 @@ def load_model(
             noise_pred_net=noise_pred_net,
             dist_pred_net=dist_pred_network,
         )
-        checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(0))  
+        checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(0)) 
 
-    if model_type == "lnp":
+    elif config["model_type"] == "nomad":
+        if config["vision_encoder"] == "nomad_vint":
+            vision_encoder = NoMaD_ViNT(
+                obs_encoding_size=config["encoding_size"],
+                context_size=config["context_size"],
+                mha_num_attention_heads=config["mha_num_attention_heads"],
+                mha_num_attention_layers=config["mha_num_attention_layers"],
+                mha_ff_dim_factor=config["mha_ff_dim_factor"],
+            )
+            vision_encoder = replace_bn_with_gn(vision_encoder)
+        elif config["vision_encoder"] == "vit": 
+            vision_encoder = ViT(
+                obs_encoding_size=config["encoding_size"],
+                context_size=config["context_size"],
+                image_size=config["image_size"],
+                patch_size=config["patch_size"],
+                mha_num_attention_heads=config["mha_num_attention_heads"],
+                mha_num_attention_layers=config["mha_num_attention_layers"],
+            )
+            vision_encoder = replace_bn_with_gn(vision_encoder)
+        
+        noise_pred_net = ConditionalUnet1D(
+                input_dim=2,
+                global_cond_dim=config["encoding_size"],
+                down_dims=config["down_dims"],
+                cond_predict_scale=config["cond_predict_scale"],
+            )
+        dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        
+        model = NoMaD(
+            vision_encoder=vision_encoder,
+            noise_pred_net=noise_pred_net,
+            dist_pred_net=dist_pred_network,
+        )
+
+        checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(0))
+        
+    if model_type == "lnp" or model_type == "nomad":
         state_dict = checkpoint
         model.load_state_dict(state_dict, strict=False)
     else:

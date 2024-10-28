@@ -13,6 +13,7 @@ from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 import clip 
 from torchvision import transforms
 import torchvision.transforms.functional as TF
+import glob
 
 # ROS
 import rclpy
@@ -48,19 +49,26 @@ from topic_names import (IMAGE_TOPIC,
 ROBOT_CONFIG_PATH ="../config/robot.yaml"
 MODEL_CONFIG_PATH = "../config/models.yaml"
 DATA_CONFIG = "../data/data_config.yaml"
+TOPOMAP_IMAGES_DIR = "topomaps/images"
 
-class LowLevelPolicy(Node): 
+class NavigateGlobal(Node): 
 
     def __init__(self, 
                 args
                 ):
-        super().__init__('low_level_policy')
+        super().__init__('navigate_global')
         self.args = args
         self.context_queue = []
         self.context_size = 5
         self.num_samples = args.num_samples
+        self.topomap_name = args.topomap_name
         
-        self.language_prompt = "Move to the workspace area"
+        self.language_prompt = args.prompt
+        self.vlm_name = args.vlm
+
+        # Load the vlm
+        self.load_vlm()
+
 
         # Load the config
         self.load_config(ROBOT_CONFIG_PATH)
@@ -77,6 +85,9 @@ class LowLevelPolicy(Node):
  
         # Load data config
         self.load_data_config()
+
+        # Load the topomap
+        self.load_topomap(os.path.join(TOPOMAP_IMAGES_DIR, self.topomap_name))
         
         # SUBSCRIBERS  
         self.image_msg = Image()
@@ -147,6 +158,33 @@ class LowLevelPolicy(Node):
             transf_img = torch.unsqueeze(transf_img, 0)
             transf_imgs.append(transf_img)
         return torch.cat(transf_imgs, dim=1)
+    
+    def load_vlm(self):
+
+        # Determine based on the input prompt a semantic distance between two nodes
+        pass
+
+    def load_topomap(self, topomap_path):
+        self.topomap = []
+        topomap_filenames = glob.glob(topomap_path + "/*.jpg")
+        for path in topomap_filenames:
+
+            self.topomap.append(PILImage.open(path))
+        self.reached_goal = False
+    
+    def determine_goal(self):
+
+        # Determine which image aligns with long horizon prompt
+
+
+        # Determine what path to take to get to the goal node
+
+    def check_closest_node(self):
+        self.start = max(self.closest_node - self.radius, 0)
+        self.end = mn(self.closest_node + self.radius + 1, self.goal_node)
+        topomap_goal_images = [transform_images(g_img, self.model_params["image_size"], center_crop=False).to(self.device) for g_img in self.topomap[start:end + 1]]
+
+
 
     def compare_output(self):
         dataset_name = "sacson"
@@ -266,7 +304,16 @@ class LowLevelPolicy(Node):
             self.chosen_waypoint = self.naction[self.args.waypoint] 
         elif self.model_type.split("_")[0] == "lelan":
             context = self.obs_images.reshape((-1, 3, 96, 96))
-            self.naction = model_output_diffusion_eval(self.model, self.noise_scheduler, context.clone(), self.clip_language_embedding.clone(), self.model_params["len_traj_pred"], 2, self.num_samples, 1, self.device)["actions"].detach().cpu().numpy()
+            self.naction = model_output_diffusion_eval(self.model, 
+                                                       self.noise_scheduler, 
+                                                       context.clone(), 
+                                                       self.clip_language_embedding.clone(), 
+                                                       context[0,...].clone(),
+                                                       self.model_params["len_traj_pred"], 
+                                                       2, 
+                                                       self.num_samples, 
+                                                       1, 
+                                                       self.device)["actions"].detach().cpu().numpy()
             self.sampled_actions_msg = Float32MultiArray()
             self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.naction.flatten())).tolist()
             print("Sampled actions shape: ", self.naction.shape)
@@ -305,22 +352,22 @@ class LowLevelPolicy(Node):
 
 def main(args):
     rclpy.init()
-    low_level_policy = LowLevelPolicy(args)
+    nav_policy = NavigateGlobal(args)
 
-    rclpy.spin(low_level_policy)
-    low_level_policy.destroy_node()
+    rclpy.spin(nav_policy)
+    nav_policy.destroy_node()
     rclpy.shutdown()
     
     print("Registered with master node. Waiting for image observations...")
-    print(f"Using {low_level_policy.device}")
+    print(f"Using {nav_policy.device}")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Code to run GNM DIFFUSION EXPLORATION on the locobot")
+        description="Code to run global language conditioned navigation")
     parser.add_argument(
         "--waypoint",
         "-w",
-        default=4, # close waypoints exihibit straight line motion (the middle waypoint is a good default)
+        default=2, # close waypoints exihibit straight line motion (the middle waypoint is a good default)
         type=int,
         help=f"""index of the waypoint used for navigation (between 0 and 4 or 
         how many waypoints your model predicts) (default: 2)""",
@@ -344,6 +391,20 @@ if __name__ == "__main__":
         default="rft", 
         type=str,
         help="Model type to use",
+    )
+    parser.add_argument(
+        "--prompt",
+        "-p", 
+        default="Go to the kitchen",
+        type=str,
+        help="Prompt for the policy",
+    )
+    parser.add_argument(
+        "--topomap_name",
+        "-t",
+        default="test",
+        type=str,
+        help="Name of the topomap to use",
     )
     args = parser.parse_args()
     main(args)
