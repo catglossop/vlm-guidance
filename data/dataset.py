@@ -40,6 +40,7 @@ class LCBCDataset(Dataset):
         normalize: bool = True,
         obs_type: str = "image",
         goal_type: str = "image",
+        language_encoder: str = "clip",
     ):
         """
         Main ViNT dataset class
@@ -84,7 +85,8 @@ class LCBCDataset(Dataset):
             self.distance_categories.append(-1)
         self.len_traj_pred = len_traj_pred
         self.learn_angle = learn_angle
-
+        self.language_encoder = language_encoder
+        
         self.min_action_distance = min_action_distance
         self.max_action_distance = max_action_distance
 
@@ -278,7 +280,7 @@ class LCBCDataset(Dataset):
         if trajectory_name in self.trajectory_cache:
             return self.trajectory_cache[trajectory_name]
         else:
-            with open(os.path.join(self.data_folder, trajectory_name, "traj_data_w_embed.pkl"), "rb") as f:
+            with open(os.path.join(self.data_folder, trajectory_name, f"traj_data_w_embed_{self.language_encoder}.pkl"), "rb") as f:
                 traj_data = pickle.load(f)
             self.trajectory_cache[trajectory_name] = traj_data
             return traj_data

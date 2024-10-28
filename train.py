@@ -120,6 +120,7 @@ def main(config):
                         goals_per_obs=data_config["goals_per_obs"],
                         normalize=config["normalize"],
                         goal_type=config["goal_type"],
+                        language_encoder=config["language_encoder"],
                     )
                     if data_split_type == "train":
                         train_dataset.append(dataset)
