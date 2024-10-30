@@ -86,7 +86,7 @@ class LCBCDataset(Dataset):
         self.len_traj_pred = len_traj_pred
         self.learn_angle = learn_angle
         self.language_encoder = language_encoder
-        
+
         self.min_action_distance = min_action_distance
         self.max_action_distance = max_action_distance
 
@@ -280,10 +280,17 @@ class LCBCDataset(Dataset):
         if trajectory_name in self.trajectory_cache:
             return self.trajectory_cache[trajectory_name]
         else:
-            with open(os.path.join(self.data_folder, trajectory_name, f"traj_data_w_embed_{self.language_encoder}.pkl"), "rb") as f:
-                traj_data = pickle.load(f)
-            self.trajectory_cache[trajectory_name] = traj_data
-            return traj_data
+            if os.path.exists(os.path.join(self.data_folder, trajectory_name, f"traj_data_w_embed_{self.language_encoder}.pkl")):
+                with open(os.path.join(self.data_folder, trajectory_name, f"traj_data_w_embed_{self.language_encoder}.pkl"), "rb") as f:
+                    traj_data = pickle.load(f)
+                self.trajectory_cache[trajectory_name] = traj_data
+                return traj_data
+            else:
+                with open(os.path.join(self.data_folder, trajectory_name, f"traj_data.pkl"), "rb") as f:
+                    traj_data = pickle.load(f)
+                self.trajectory_cache[trajectory_name] = traj_data
+                return traj_data
+
 
     def __len__(self) -> int:
         return len(self.index_to_data)
@@ -334,10 +341,14 @@ class LCBCDataset(Dataset):
         assert goal_time < goal_traj_len, f"{goal_time} an {goal_traj_len}"
 
         # Load language embeddings
-        lang_embed = curr_traj_data["text_features"]
-        random_ind = np.random.randint(0, lang_embed.shape[0])
-        selected_lang_embed = lang_embed[random_ind, :]
-        selected_lang = curr_traj_data["language_annotations"][random_ind]["traj_description"]
+        if "text_features" not in curr_traj_data.keys():
+            selected_lang_embed = torch.zeros(512)
+            selected_lang = ""
+        else:
+            lang_embed = curr_traj_data["text_features"]
+            random_ind = np.random.randint(0, lang_embed.shape[0])
+            selected_lang_embed = lang_embed[random_ind, :]
+            selected_lang = curr_traj_data["language_annotations"][random_ind]["traj_description"]
 
         # Compute actions
         actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time)

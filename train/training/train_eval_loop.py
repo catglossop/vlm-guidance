@@ -283,7 +283,6 @@ def train_eval_loop_multimodal(
             "lr": optimizer.param_groups[0]["lr"],
         }, commit=False)
 
-        
     # Flush the last set of eval logs
     wandb.log({})
 
