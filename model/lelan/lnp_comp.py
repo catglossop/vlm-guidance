@@ -263,7 +263,7 @@ class LNPMultiModal(nn.Module):
         self.imagegoal_mask[:, -2] = True # Mask out the image goal 
         self.all_masks = torch.cat([self.no_mask, self.imagegoal_mask, self.langgoal_mask], dim=0)
 
-    def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, feat_text: torch.tensor):
+    def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, feat_text: torch.tensor, input_goal_mask: torch.tensor = None):
         # Get the image goal encoding
         obsgoal_img = torch.cat([obs_img, goal_img], dim=1) # concatenate the obs image/context and goal image --> non image goal?
         obsgoal_encoding = self.goal_encoder.extract_features(obsgoal_img) # get encoding of this img 
@@ -306,9 +306,9 @@ class LNPMultiModal(nn.Module):
         if self.positional_encoding:
             obs_encoding = self.positional_encoding(obs_encoding)
         obs_encoding_tokens = self.sa_encoder(obs_encoding)
-        is src_key_padding_mask is not None:
-            avg_mask = torch.index_select(self.avg_pool_mask.to(device, dtype=torch.bool), 0, no_goal_mask).unsqueeze(-1)
-            obs_encoding_tokens = obs_encoding_tokens * avg_mask
+        # is src_key_padding_mask is not None:
+        #     avg_mask = torch.index_select(self.avg_pool_mask.to(device, dtype=torch.bool), 0, no_goal_mask).unsqueeze(-1)
+        #     obs_encoding_tokens = obs_encoding_tokens * avg_mask
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
         return obs_encoding_tokens
 

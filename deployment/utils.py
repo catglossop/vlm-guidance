@@ -52,7 +52,7 @@ def load_model(
             device,
         )
         checkpoint = torch.load(model_path, map_location=device)
-    elif model_type == "lnp":
+    elif model_type == "lnp" or model_type == "upweight":
         if config["vision_encoder"] == "lnp_clip_film":
             vision_encoder = LNP_clip_FiLM(
                 obs_encoder=config["obs_encoder"],
@@ -70,12 +70,20 @@ def load_model(
                 clip_sample=True,
                 prediction_type='epsilon'
             )
-        noise_pred_net = ConditionalUnet1D(
-                input_dim=2,
-                global_cond_dim=config["encoding_size"],
-                down_dims=config["down_dims"],
-                cond_predict_scale=config["cond_predict_scale"],
-            )
+        if model_type == "upweight":
+            noise_pred_net = ConditionalUnet1D(
+                    input_dim=2,
+                    global_cond_dim=config["encoding_size"]*2,
+                    down_dims=config["down_dims"],
+                    cond_predict_scale=config["cond_predict_scale"],
+                )
+        else:
+                noise_pred_net = ConditionalUnet1D(
+                    input_dim=2,
+                    global_cond_dim=config["encoding_size"],
+                    down_dims=config["down_dims"],
+                    cond_predict_scale=config["cond_predict_scale"],
+                )
         dist_pred_network = DenseNetwork_lnp(embedding_dim=config["encoding_size"]*(config["context_size"]+1), control_horizon=config["len_traj_pred"])
         model = LNP_clip(
             vision_encoder=vision_encoder,
@@ -121,7 +129,7 @@ def load_model(
 
         checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(0))
         
-    if model_type == "lnp" or model_type == "nomad":
+    if model_type == "lnp" or model_type == "nomad" or model_type == "upweight":
         state_dict = checkpoint
         model.load_state_dict(state_dict, strict=False)
     else:
