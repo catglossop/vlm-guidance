@@ -573,7 +573,7 @@ def train_eval_loop_lnp_clip(
 
 def load_model(model, model_type, checkpoint: dict) -> None:
     """Load model from checkpoint."""
-    if model_type == "lnp":
+    if model_type == "lnp" or model_type == "lnp_multi_modal":
         state_dict = checkpoint
         model.load_state_dict(state_dict, strict=False)
     else:
