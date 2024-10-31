@@ -511,8 +511,11 @@ def train_lnp(
         
             B = obs_image.size(0)
             goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
-            obsgoal_cond, film_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
-            cond = torch.cat([obsgoal_cond, film_cond], dim=1)
+            print(torch.argwhere(torch.sum(lang_embedding, dim=1) == 0))
+            breakpoint()
+            goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
+            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
+
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
             naction = from_numpy(ndeltas).to(device)
@@ -545,6 +548,7 @@ def train_lnp(
                     1,
                     obs_image.size(0),
                     device,
+                    goal_mask=goal_mask,
                 )
                 action_pred = model_outputs["actions"]
                 losses = _compute_losses(
@@ -570,7 +574,7 @@ def train_lnp(
                 # Predict the noise residual
                 obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
                 
-                noise_pred = model("noise_pred_net", sample=noisy_action, timestep=timesteps, global_cond=cond)
+                noise_pred = model("noise_pred_net", sample=noisy_action, timestep=timesteps, global_cond=obsgoal_cond)
 
                 def action_reduce(unreduced_loss: torch.Tensor):
                     # Reduce over non-batch dimensions to get loss per batch element
@@ -713,7 +717,7 @@ def evaluate_lnp(
         
             B = obs_image.size(0)
 
-            obsgoal_cond, film_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding)
+            obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding)
 
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
@@ -762,8 +766,7 @@ def evaluate_lnp(
             
                 # Predict the noise residual
                 obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
-                cond = torch.cat([obsgoal_cond, film_cond], dim=1)
-                noise_pred = ema_model("noise_pred_net", sample=noisy_actions, timestep=timesteps, global_cond=cond)
+                noise_pred = ema_model("noise_pred_net", sample=noisy_actions, timestep=timesteps, global_cond=obsgoal_cond)
 
             if i % print_log_freq == 0 and print_log_freq != 0:
                 losses = _compute_losses(
@@ -904,8 +907,8 @@ def train_lnp_multimodal(
         
             B = obs_image.size(0)
             goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
+            goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
             obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
-
 
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
@@ -979,7 +982,7 @@ def train_lnp_multimodal(
 
             # Update Exponential Moving Average of the model weights
             ema_model.step(model)
-                    
+
             for key, value in losses.items():
                 if key in loggers:
                     logger = loggers[key]
@@ -1106,6 +1109,7 @@ def evaluate_lnp_multimodal(
         
             B = obs_image.size(0)
             goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
+            goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
             obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
 
             deltas = get_delta(action_label)
@@ -1167,14 +1171,14 @@ def evaluate_lnp_multimodal(
                     logger = loggers[key]
                     logger.log_data(value.item())
             
-            # data_log = {}
-            # for key, logger in loggers.items():
-            #     data_log[logger.full_name()] = logger.latest()
-            #     if i % print_log_freq == 0 and print_log_freq != 0:
-            #         print(f"(epoch {epoch}) (batch {i}/{num_batches - 1}) {logger.display()}")
+            data_log = {}
+            for key, logger in loggers.items():
+                data_log[logger.full_name()] = logger.latest()
+                if i % print_log_freq == 0 and print_log_freq != 0:
+                    print(f"(epoch {epoch}) (batch {i}/{num_batches - 1}) {logger.display()}")
 
-            #     if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
-            #         wandb.log(data_log, commit=True)
+                if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
+                    wandb.log(data_log, commit=True)
 
     _log_data(
         i=i,
@@ -1260,14 +1264,13 @@ def model_output_diffusion(
     num_samples: int,
     batch_size: int,
     device: torch.device,
+    goal_mask=None,
 ):
     
-    obsgoal_cond, film_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=goal_mask)
+    obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=goal_mask)
     obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
-    film_cond = film_cond.repeat_interleave(num_samples, dim=0)
 
-    cond = torch.cat([obsgoal_cond, film_cond], dim=1)
     # initialize action from Gaussian noise
     noisy_diffusion_output = torch.randn(
         (batch_size, pred_horizon, action_dim), device=device)
@@ -1278,7 +1281,7 @@ def model_output_diffusion(
             "noise_pred_net",
             sample=diffusion_output,
             timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
-            global_cond=cond
+            global_cond=obsgoal_cond
         )
         # inverse diffusion step (remove noise)
         diffusion_output = noise_scheduler.step(
@@ -1313,23 +1316,22 @@ def model_output_diffusion_eval(
         film_cond = film_cond.repeat_interleave(num_samples, dim=0)
         cond = torch.cat([obsgoal_cond, film_cond], dim=1)
     else:
-        obsgoal_cond, film_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=batch_lang_embeddings)
+        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=batch_lang_embeddings)
         obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
         obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
-        film_cond = film_cond.repeat_interleave(num_samples, dim=0)  
 
     # initialize action from Gaussian noise
     noisy_diffusion_output = torch.randn(
         (num_samples, pred_horizon, action_dim), device=device)
     diffusion_output = noisy_diffusion_output
-    cond = torch.cat([obsgoal_cond, film_cond], dim=1)
+
     for k in noise_scheduler.timesteps[:]:
         # predict noise
         noise_pred = model(
             "noise_pred_net",
             sample=diffusion_output,
             timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
-            global_cond=cond
+            global_cond=obsgoal_cond
         )
         # inverse diffusion step (remove noise)
         diffusion_output = noise_scheduler.step(

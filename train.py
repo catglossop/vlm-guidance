@@ -87,6 +87,7 @@ def main(config):
         weights.append(data_config["weight"])
     total_weight = sum(weights)
     train_dataset_weights = [w / total_weight for w in weights]
+    print(train_dataset_weights)
 
     for dataset_name in config["datasets"]:
         data_config = config["datasets"][dataset_name]
@@ -133,8 +134,8 @@ def main(config):
 
     # combine all the datasets from different robots
     train_dataset = ConcatDataset(train_dataset)
-    data_dist = np.concatenate([[train_dataset_weights[i]]*train_dataset_lengths[i] for i in range(len(train_dataset_lengths))])
-    sampler = WeightedRandomSampler(data_dist, len(train_dataset), replacement=True)
+    data_dist = np.concatenate([[train_dataset_weights[i]/train_dataset_lengths[i]]*train_dataset_lengths[i] for i in range(len(train_dataset_lengths))])
+    sampler = WeightedRandomSampler(data_dist, len(train_dataset), replacement=False)
 
     train_loader = DataLoader(
         train_dataset,

@@ -6,9 +6,11 @@ from tqdm import tqdm
 import pickle as pkl
 import tensorflow_hub as hub
 import tensorflow_text
+from transformers import T5EncoderModel, T5Tokenizer
 
 USE_CLIP = False
-USE_UNI = True
+USE_UNI = False
+USE_T5 = True
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled"
 input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled"
@@ -19,6 +21,9 @@ if USE_CLIP:
     model, preprocess = clip.load("ViT-B/32", device=device)
 if USE_UNI:
     text_model = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
+if USE_T5:
+    tokenizer = T5Tokenizer.from_pretrained("google-t5/t5-small")
+    model = T5EncoderModel.from_pretrained("google-t5/t5-small")
 
 for path in tqdm(lang_txt_paths): 
 
@@ -39,6 +44,13 @@ for path in tqdm(lang_txt_paths):
     if USE_UNI:
         text_features = text_model([lang["traj_description"] for lang in lang_annotations]).numpy()
         new_path = path.replace("traj_data.pkl", "traj_data_w_embed_google.pkl")
+    if USE_T5:
+        if len(lang_annotations) == 0:
+            print(f"Path {path} has no lang annotations")
+            continue
+        tokens = tokenizer([lang["traj_description"] for lang in lang_annotations], return_tensors="pt", padding=True)
+        text_features = model(tokens["input_ids"]).last_hidden_state.mean(dim=1).detach().cpu().numpy()
+        new_path = path.replace("traj_data.pkl", "traj_data_w_embed_t5.pkl")
     traj_data["text_features"] = text_features
     with open(new_path, "wb") as new_file:
         pkl.dump(traj_data, new_file)

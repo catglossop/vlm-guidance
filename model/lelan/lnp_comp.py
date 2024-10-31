@@ -244,7 +244,7 @@ class LNPMultiModal(nn.Module):
         self.compress_final_enc = nn.Linear(self.goal_encoding_size + self.goal_encoding_size + self.num_obs_features, self.goal_encoding_size)
         
         # Initialize positional encoding and self-attention layers
-        self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=2) #no context
+        self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=8) #no context
         self.sa_layer = nn.TransformerEncoderLayer(
             d_model=self.goal_encoding_size, 
             nhead=mha_num_attention_heads, 
@@ -262,13 +262,15 @@ class LNPMultiModal(nn.Module):
         self.langgoal_mask[:, -1] = True # Mask out the language goal
         self.imagegoal_mask[:, -2] = True # Mask out the image goal 
         self.all_masks = torch.cat([self.no_mask, self.imagegoal_mask, self.langgoal_mask], dim=0)
+        self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.imagegoal_mask.float()) * ((self.context_size + 3)/(self.context_size + 2)), (1 - self.langgoal_mask.float()) * ((self.context_size + 3)/(self.context_size + 2))], dim=0)
 
     def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, feat_text: torch.tensor, input_goal_mask: torch.tensor = None):
+        device = obs_img.device
         # Get the image goal encoding
         obsgoal_img = torch.cat([obs_img, goal_img], dim=1) # concatenate the obs image/context and goal image --> non image goal?
         obsgoal_encoding = self.goal_encoder.extract_features(obsgoal_img) # get encoding of this img 
         obsgoal_encoding = self.goal_encoder._avg_pooling(obsgoal_encoding) # avg pooling 
-        
+    
         if self.goal_encoder._global_params.include_top:
             obsgoal_encoding = obsgoal_encoding.flatten(start_dim=1)
             obsgoal_encoding = self.goal_encoder._dropout(obsgoal_encoding)
@@ -295,21 +297,37 @@ class LNPMultiModal(nn.Module):
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
         # Create the goal_mask: 0 = no mask, 1 = mask
         goal_mask = torch.zeros((1, self.context_size + 2), dtype=torch.bool)
-        obs_encoding = torch.cat((obs_encoding, obslang_encoding, obsgoal_encoding), dim=1)  
+        obsgoal_encoding = torch.cat((obs_encoding, obslang_encoding, obsgoal_encoding), dim=1)  
         if len(obsgoal_encoding.shape) == 2:
             obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
-        assert obsgoal_encoding.shape[2] == self.goal_encoding_size
-        obs_encoding = obsgoal_encoding    
+        assert obsgoal_encoding.shape[2] == self.goal_encoding_size   
 
-        # If a goal mask is provided 
         # Apply positional encoding 
         if self.positional_encoding:
-            obs_encoding = self.positional_encoding(obs_encoding)
-        obs_encoding_tokens = self.sa_encoder(obs_encoding)
-        # is src_key_padding_mask is not None:
-        #     avg_mask = torch.index_select(self.avg_pool_mask.to(device, dtype=torch.bool), 0, no_goal_mask).unsqueeze(-1)
-        #     obs_encoding_tokens = obs_encoding_tokens * avg_mask
+            obsgoal_encoding = self.positional_encoding(obsgoal_encoding)
+        
+        # If a goal mask is provided
+        if input_goal_mask is not None:
+            no_goal_mask = input_goal_mask.long() # (B, ) which is 1 is goal is masked and 0 otherwise
+            goal_select = (torch.rand((no_goal_mask.shape[0], 1)) < 0.0).long().squeeze() + 1 # randomly mask out the image or language goal
+            no_goal_mask = no_goal_mask * goal_select.to(device)
+            no_goal_mask[input_goal_mask == -1] = 2 # mask out the lanuage goal as there is not language
+            # print(f"Neither masked: {torch.round(torch.sum(no_goal_mask == 0)/no_goal_mask.shape[0]*100, decimals=3)}%")
+            # print(f"Image masked: {torch.round(torch.sum(no_goal_mask == 1)/no_goal_mask.shape[0]*100, decimals=3)}%")
+            # print(f"Language masked: {torch.round(torch.sum(no_goal_mask == 2)/no_goal_mask.shape[0]*100, decimals=3)}%")
+            src_key_padding_mask = torch.index_select(self.all_masks.to(device), 0, no_goal_mask)
+        else:
+            src_key_padding_mask = None
+
+        obs_encoding_tokens = self.sa_encoder(obsgoal_encoding, src_key_padding_mask=src_key_padding_mask)
+
+        # Reconfigure avg_mask for given goal config
+        if src_key_padding_mask is not None:
+            avg_mask = torch.index_select(self.avg_pool_mask.to(device, dtype=torch.bool), 0, no_goal_mask).unsqueeze(-1)
+            obs_encoding_tokens = obs_encoding_tokens * avg_mask
+        
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
+
         return obs_encoding_tokens
 
 
@@ -390,18 +408,17 @@ class LNP_clip_FiLM(nn.Module):
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
 
         # Concat the obs encoding with the goal encoding
-        obs_encoding = torch.cat((obs_encoding, (obsgoal_encoding)*5), dim=1) 
+        obsgoal_encoding = torch.cat((obs_encoding, obsgoal_encoding), dim=1) 
         if len(obsgoal_encoding.shape) == 2:
             obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size
-        obs_encoding = obsgoal_encoding
                    
         # Apply positional encoding 
         if self.positional_encoding:
-            obs_encoding = self.positional_encoding(obs_encoding)
-        obs_encoding_tokens = self.sa_encoder(obs_encoding)
+            obsgoal_encoding = self.positional_encoding(obsgoal_encoding)
+        obs_encoding_tokens = self.sa_encoder(obsgoal_encoding)
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
-        return obs_encoding_tokens, obsgoal_encoding.squeeze(1)
+        return obs_encoding_tokens
 
 # Utils for Group Norm
 def replace_bn_with_gn(
@@ -493,44 +510,7 @@ class FeatureExtractor_last(nn.Module):
         
     def forward(self, x):
         return self.model(x)
-
-class FeatureExtractor_old(nn.Module):
-    def __init__(self):
-        super(FeatureExtractor_old, self).__init__()
-        
-        self.model = nn.Sequential(
-            #conv(3, 128, 5, 2, 2),
-            #conv(128, 128, 3, 2, 1),
-            #conv(128, 128, 3, 2, 1),
-            conv(3, 128, 5, 2, 2),
-            conv(128, 128, 3, 2, 1),
-            conv(128, 128, 3, 2, 1),
-        )
-        
-    def forward(self, x):
-        return self.model(x)
-
-class FeatureExtractor_last_old(nn.Module):
-    def __init__(self):
-        super(FeatureExtractor_last_old, self).__init__()
-        
-        self.model = nn.Sequential(
-            #conv(128, 256, 3, 2, 1), 
-            #conv(256, 256, 3, 2, 1),                   
-            #conv(256, 256, 3, 2, 1),
-            #conv(256, 512, 3, 2, 1),
-            #conv(512, 1024, 3, 2, 1),
-            #conv(1024, 1024, 3, 2, 1),             
-            conv(128, 256, 3, 2, 1),
-            conv(256, 512, 3, 2, 1),
-            conv(512, 1024, 3, 2, 1),
-            conv(1024, 1024, 3, 2, 1),                                
-        )
-        
-    def forward(self, x):
-        return self.model(x)
-
-        
+  
 class FiLMBlock(nn.Module):
     def __init__(self):
         super(FiLMBlock, self).__init__()
@@ -613,52 +593,8 @@ class FiLM(nn.Module):
         feature = self.output_layer(feature)
         return feature
 
-class FiLM_old(nn.Module):
-    def __init__(self, n_res_blocks, n_classes, n_channels):
-        super(FiLM_old, self).__init__()
-        dim_question = 512
-        self.film_generator = nn.Linear(dim_question, 2 * n_res_blocks * n_channels)
-        self.feature_extractor = FeatureExtractor_old()
-        self.res_blocks = nn.ModuleList()
-        self.feature_extractor_last = FeatureExtractor_last_old()
-
-        for _ in range(n_res_blocks):
-            self.res_blocks.append(ResBlock(n_channels + 2, n_channels))
-    
-        self.n_res_blocks = n_res_blocks
-        self.n_channels = n_channels
-        
-    def forward(self, x, question):
-        batch_size = x.size(0)
-        device = x.device
-        
-        x = self.feature_extractor(x)
-        question = question.repeat_interleave(6, dim=0)
-
-        film_vector = self.film_generator(question).view(
-            batch_size, self.n_res_blocks, 2, self.n_channels)
-        
-        d = x.size(2)
-        coordinate = torch.arange(-1, 1 + 0.00001, 2 / (d-1)).to(device)
-        coordinate_x = coordinate.expand(batch_size, 1, d, d)
-        coordinate_y = coordinate.view(d, 1).expand(batch_size, 1, d, d)
-        
-        for i, res_block in enumerate(self.res_blocks):
-            beta = film_vector[:, i, 0, :]
-            gamma = film_vector[:, i, 1, :]
-            
-            x = torch.cat([x, coordinate_x, coordinate_y], 1)
-            x = res_block(x, beta, gamma)
-        
-        feature = self.feature_extractor_last(x)
-        
-        return feature
-
 def make_model(input_dim, input_channels, n_res, n_channels, output_dim):
     return FiLM(input_dim, input_channels, n_res, n_channels, output_dim)
-
-def make_model_old(n_res, n_classes, n_channels):
-    return FiLM_old(n_res, n_classes, n_channels)
                
 
 
