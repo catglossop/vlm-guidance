@@ -1308,13 +1308,17 @@ def model_output_diffusion_eval(
     num_samples: int,
     batch_size: int,
     device: torch.device,
+    mask_image: bool = False,
 ):
+    if mask_image:
+        input_goal_mask = torch.ones(batch_size, device=device)
+
     if batch_goal_images is not None:
-        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings)
+        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=input_goal_mask)
         obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
         obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
     else:
-        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=batch_lang_embeddings)
+        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=batch_lang_embeddings, input_goal_mask=input_goal_mask)
         obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
         obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
 

@@ -15,8 +15,8 @@ from torchvision import transforms
 import torchvision.transforms.functional as TF
 
 from model.model import ResNetFiLMTransformer
-from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM
-from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp
+from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM, LNPMultiModal
+from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp, DenseNetwork, LNP_MM
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 from train.training.train_utils import replace_bn_with_gn, model_output_diffusion_eval
@@ -116,12 +116,12 @@ def load_config(config_path):
     return config
 
 
-def model_output_lnp(model, noise_scheduler, context, prompt_embedding, pred_horizon, action_dim, num_samples, batch_size, linear_output, device):
+def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding, pred_horizon, action_dim, num_samples, batch_size, linear_output, device, mask_image=False):
     if linear_output:
         return model(context.clone(), prompt_embedding).detach().cpu().numpy()
     else:
         print(context.shape)
-        return model_output_diffusion_eval(model, noise_scheduler, context.clone(), prompt_embedding, None, pred_horizon, action_dim, num_samples, batch_size, device)["actions"].detach().cpu().numpy()
+        return model_output_diffusion_eval(model, noise_scheduler, context.clone(), prompt_embedding, goal_img, pred_horizon, action_dim, num_samples, batch_size, device, mask_image)["actions"].detach().cpu().numpy()
         
 def main(args): 
     config = load_config(args.config)
@@ -196,6 +196,17 @@ def main(args):
             dist_pred_net=dist_pred_network,
         )    
     elif config["model_type"] == "lnp_multi_modal":
+        if config["vision_encoder"] == "lnp_multi_modal":
+            vision_encoder = LNPMultiModal(
+                obs_encoder=config["obs_encoder"],
+                obs_encoding_size=config["obs_encoding_size"],
+                lang_encoding_size=config["lang_encoding_size"],
+                context_size=config["context_size"],
+                mha_num_attention_heads=config["mha_num_attention_heads"],
+                mha_num_attention_layers=config["mha_num_attention_layers"],
+                mha_ff_dim_factor=config["mha_ff_dim_factor"],
+                )
+            vision_encoder = replace_bn_with_gn(vision_encoder)
         noise_scheduler = DDPMScheduler(
                 num_train_timesteps=config["num_diffusion_iters"],
                 beta_schedule='squaredcos_cap_v2',
@@ -236,11 +247,13 @@ def main(args):
             output_1 = model(context.clone(), prompt_embedding_1).detach().cpu().numpy()
             output_2 = model(context.clone(), prompt_embedding_2).detach().cpu().numpy()
         elif config["model_type"] == "lnp":
-            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
-            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
         elif config["model_type"] == "lnp_multi_modal":
-            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
-            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+            mask_image = True
+            goal_img = torch.zeros((1, 3, 96, 96)).to(args.device)
+            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
+            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
     compare_output(output_1, output_2, viz_img, args.prompt_1, args.prompt_2, viz_context)
 
 
