@@ -13,6 +13,9 @@ from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
 import clip 
 from torchvision import transforms
 import torchvision.transforms.functional as TF
+import tensorflow_hub as hub
+# import tensorflow_text
+from transformers import T5EncoderModel, T5Tokenizer
 
 # ROS
 import rclpy
@@ -70,10 +73,13 @@ class NavigateLocal(Node):
         self.model_type = args.model_type
         print("Using device:", self.device)
         self.load_model_from_config(MODEL_CONFIG_PATH, args.model_type)
-        self.clip_model_type = self.model_params["clip_model_type"]
-        self.clip_model, self.preprocess = clip.load(self.clip_model_type, device=self.device)
-        self.clip_language_embedding =  clip.tokenize(self.language_prompt).to(self.device)
-        self.clip_language_embedding = self.clip_model.encode_text(self.clip_language_embedding).to(torch.float)
+        self.language_encoder = self.model_params["language_encoder"]
+
+        # self.clip_model, self.preprocess = clip.load(self.clip_model_type, device=self.device)
+        # self.clip_language_embedding =  clip.tokenize(self.language_prompt).to(self.device)
+        # self.clip_language_embedding = self.clip_model.encode_text(self.clip_language_embedding).to(torch.float)
+        self.load_language_encoder(self.language_encoder)
+        self.embed_language(self.language_prompt)
  
         # Load data config
         self.load_data_config()
@@ -182,7 +188,27 @@ class NavigateLocal(Node):
         ax[0].set_ylim((-5, 5))
         ax[0].set_xlim((-5, 15))
         plt.savefig("visualize.png")
-
+    def load_language_encoder(self, language_encoder):
+        if language_encoder == "clip":
+            self.clip_model, self.preprocess = clip.load("ViT-B/32", device=self.device)
+        elif language_encoder == "google":
+            self.text_model = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
+        elif language_encoder == "t5":
+            self.tokenizer = T5Tokenizer.from_pretrained("google-t5/t5-small")
+            self.model = T5EncoderModel.from_pretrained("google-t5/t5-small")
+        else:
+            raise ValueError(f"Language encoder {language_encoder} not supported")
+    def embed_language(self, language_prompt):
+        if self.language_encoder == "clip":
+            self.clip_language_embedding = clip.tokenize(language_prompt).to(self.device)
+            self.clip_language_embedding = self.clip_model.encode_text(self.clip_language_embedding).to(torch.float)
+        elif self.language_encoder == "google":
+            self.clip_language_embedding = self.text_model(language_prompt)
+        elif self.language_encoder == "t5":
+            self.clip_language_embedding = self.tokenizer(language_prompt, return_tensors="pt", padding=True)
+            self.clip_language_embedding = self.model(self.clip_language_embedding["input_ids"]).last_hidden_state.mean(dim=1)
+        else:
+            raise ValueError(f"Language encoder {self.language_encoder} not supported")
     def load_config(self, robot_config_path):
         with open(robot_config_path, "r") as f:
             robot_config = yaml.safe_load(f)
@@ -264,22 +290,30 @@ class NavigateLocal(Node):
             self.naction = self.nactions[0] 
             self.chosen_waypoint = self.naction[self.args.waypoint] 
         elif self.model_type.split("_")[0] == "lelan":
+            if self.model_type == "lelan_mm":
+                mask_image = True
+                goal_img = torch.zeros((1, 3, 96, 96)).to(self.device)
+            else:
+                goal_img = None
             self.nactions = model_output_diffusion_eval(self.model, 
                                                        self.noise_scheduler, 
                                                        self.obs_images.clone(), 
                                                        self.clip_language_embedding.clone(), 
                                                        self.obs_images[0,...].clone(),
+                                                       goal_img,
                                                        self.model_params["len_traj_pred"], 
                                                        2, 
                                                        self.num_samples, 
                                                        1, 
-                                                       self.device)["actions"].detach().cpu().numpy()
+                                                       self.device, 
+                                                       mask_image)["actions"].detach().cpu().numpy()
             self.sampled_actions_msg = Float32MultiArray()
             self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.nactions.flatten())).tolist()
             print("Sampled actions shape: ", self.nactions.shape)
             self.sampled_actions_pub.publish(self.sampled_actions_msg)
             self.naction = self.nactions[0] 
             self.chosen_waypoint = self.naction[self.args.waypoint] 
+        
 
     def timer_callback(self):
         start = time.time()

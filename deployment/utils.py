@@ -20,8 +20,8 @@ from prettytable import PrettyTable
 
 # models
 from model.model import ResNetFiLMTransformer
-from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM
-from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp
+from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM, LNPMultiModal
+from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp, LNP_MM
 from model.nomad.nomad import NoMaD, DenseNetwork
 from model.nomad.nomad_vint import NoMaD_ViNT
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
@@ -52,9 +52,48 @@ def load_model(
             device,
         )
         checkpoint = torch.load(model_path, map_location=device)
-    elif model_type == "lnp":
+    elif model_type == "lnp" or model_type == "upweight":
         if config["vision_encoder"] == "lnp_clip_film":
             vision_encoder = LNP_clip_FiLM(
+                obs_encoder=config["obs_encoder"],
+                obs_encoding_size=config["obs_encoding_size"],
+                lang_encoding_size=config["lang_encoding_size"],
+                context_size=config["context_size"],
+                mha_num_attention_heads=config["mha_num_attention_heads"],
+                mha_num_attention_layers=config["mha_num_attention_layers"],
+                mha_ff_dim_factor=config["mha_ff_dim_factor"],
+                )
+            vision_encoder = replace_bn_with_gn(vision_encoder)
+        noise_scheduler = DDPMScheduler(
+                num_train_timesteps=config["num_diffusion_iters"],
+                beta_schedule='squaredcos_cap_v2',
+                clip_sample=True,
+                prediction_type='epsilon'
+            )
+        if model_type == "upweight":
+            noise_pred_net = ConditionalUnet1D(
+                    input_dim=2,
+                    global_cond_dim=config["encoding_size"]*2,
+                    down_dims=config["down_dims"],
+                    cond_predict_scale=config["cond_predict_scale"],
+                )
+        else:
+                noise_pred_net = ConditionalUnet1D(
+                    input_dim=2,
+                    global_cond_dim=config["encoding_size"],
+                    down_dims=config["down_dims"],
+                    cond_predict_scale=config["cond_predict_scale"],
+                )
+        dist_pred_network = DenseNetwork_lnp(embedding_dim=config["encoding_size"]*(config["context_size"]+1), control_horizon=config["len_traj_pred"])
+        model = LNP_clip(
+            vision_encoder=vision_encoder,
+            noise_pred_net=noise_pred_net,
+            dist_pred_net=dist_pred_network,
+        )
+        checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(0)) 
+    elif config["model_type"] == "lnp_multi_modal":
+        if config["vision_encoder"] == "lnp_multi_modal":
+            vision_encoder = LNPMultiModal(
                 obs_encoder=config["obs_encoder"],
                 obs_encoding_size=config["obs_encoding_size"],
                 lang_encoding_size=config["lang_encoding_size"],
@@ -76,14 +115,13 @@ def load_model(
                 down_dims=config["down_dims"],
                 cond_predict_scale=config["cond_predict_scale"],
             )
-        dist_pred_network = DenseNetwork_lnp(embedding_dim=config["encoding_size"]*(config["context_size"]+1), control_horizon=config["len_traj_pred"])
-        model = LNP_clip(
+        dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        model = LNP_MM(
             vision_encoder=vision_encoder,
             noise_pred_net=noise_pred_net,
             dist_pred_net=dist_pred_network,
-        )
+        ) 
         checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(0)) 
-
     elif config["model_type"] == "nomad":
         if config["vision_encoder"] == "nomad_vint":
             vision_encoder = NoMaD_ViNT(
@@ -121,7 +159,7 @@ def load_model(
 
         checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(0))
         
-    if model_type == "lnp" or model_type == "nomad":
+    if model_type == "lnp" or model_type == "nomad" or model_type == "upweight" or model_type == "lnp_multi_modal":
         state_dict = checkpoint
         model.load_state_dict(state_dict, strict=False)
     else:
