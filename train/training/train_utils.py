@@ -909,7 +909,7 @@ def train_lnp_multimodal(
             goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
             goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
             obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
-
+            
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
             naction = from_numpy(ndeltas).to(device)
