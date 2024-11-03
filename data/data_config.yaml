@@ -81,4 +81,7 @@ cory_hall_labelled:
 go_stanford_labelled:
   metric_waypoint_spacing: 0.12
 
+scand_labelled:
+  metric_waypoint_spacing: 0.38
+
 # add your own dataset params here:

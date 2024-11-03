@@ -241,7 +241,7 @@ class LNPMultiModal(nn.Module):
         else:
             self.compress_goal_enc = nn.Identity()
         
-        self.compress_final_enc = nn.Linear(self.goal_encoding_size + self.goal_encoding_size + self.num_obs_features, self.goal_encoding_size)
+        self.compress_final_enc = nn.Linear(self.goal_encoding_size + self.lang_encoding_size, self.goal_encoding_size)
         
         # Initialize positional encoding and self-attention layers
         self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=8) #no context
@@ -327,7 +327,10 @@ class LNPMultiModal(nn.Module):
             obs_encoding_tokens = obs_encoding_tokens * avg_mask
         
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
+        obs_encoding_tokens = torch.cat((obs_encoding_tokens, inst_encoding), dim=1)
 
+        if obs_encoding_tokens.shape[1] != self.goal_encoding_size:
+            obs_encoding_tokens = self.compress_final_enc(obs_encoding_tokens)
         return obs_encoding_tokens
 
 

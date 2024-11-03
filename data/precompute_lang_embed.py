@@ -13,7 +13,8 @@ USE_UNI = False
 USE_T5 = True
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled"
-input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled"
+# input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled"
+input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/scand_labelled"
 lang_txt_paths = glob.glob(f"{input_path}/*/traj_data.pkl", recursive=True)
 if USE_CLIP:
     model_version = "ViT-B/32"
