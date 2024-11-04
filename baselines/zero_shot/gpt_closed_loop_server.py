@@ -1,31 +1,17 @@
-import requests
 from io import BytesIO
 from PIL import Image
-import numpy as np
 import urllib.request
 import os
 from PIL import Image
 import matplotlib.pyplot as plt
 import sys
-
 import inspect
-
-import numpy as np
 import tensorflow as tf
-from absl import app, flags
-
 import wandb
 
-# jax diffusion stuff
-from absl import app as absl_app
-from absl import flags
-from PIL import Image
-
-# flask app here
+# flask app 
 import base64
 from flask import Flask, request, jsonify
-from io import BytesIO
-from PIL import Image
 
 from datetime import datetime
 import os
@@ -35,7 +21,6 @@ import time
 from typing import Callable, List, Tuple
 import imageio
 import numpy as np
-from absl import app, flags
 from openai import OpenAI
 ##############################################################################
 # Import OpenAI params 
