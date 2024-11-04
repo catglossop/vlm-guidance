@@ -1,12 +1,13 @@
 project_name: lcbc
 run_name: lelan_multi_modal
+load_run: lcbc/lelan_multi_modal_2024_11_04_00_12_44
 
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
 train: True
-batch_size: 512
+batch_size: 450
 epochs: 200
-gpu_ids: [2,4,6]
+gpu_ids: [6]
 num_workers: 12
 lr: 1e-4
 optimizer: adamw
@@ -114,7 +115,7 @@ datasets:
     goals_per_obs: 1
     negative_mining: True
     weight: 0.1
-  scand_relabelled:
+  scand_labelled:
     data_folder: /home/cglossop/lcbc_datasets/scand_labelled/
     train: /home/cglossop/vlm-guidance/data/data_splits/scand_labelled/train/
     test: /home/cglossop/vlm-guidance/data/data_splits/scand_labelled/test/
