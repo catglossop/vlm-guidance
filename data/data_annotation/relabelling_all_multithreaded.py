@@ -25,7 +25,7 @@ CAMERA_METRICS = {"camera_height" : 0.95, # meters
                 "camera_matrix" : {"fx": 272.547000, "fy": 266.358000, "cx": 320.000000, "cy": 220.000000},
                 "dist_coeffs" : {"k1": -0.038483, "k2": -0.010456, "p1": 0.003930, "p2": -0.001007, "k3": 0.000000}}
 VIZ_IMAGE_SIZE = (480, 640)  # (height, width)
-TRANSITION_TO_MUTLIPROCESS = True
+TRANSITION_TO_MUTLIPROCESS = False
 lock = Lock()
 # Utility functions
 def pil_to_base64(img):
@@ -402,7 +402,15 @@ def main(args):
         paths = random.choices(paths, k=10)
     current_state = None
     starting_from_save = False
-    
+    completed_paths = os.listdir(output)
+    completed_paths = [p.split("_chunk_")[0] for p in completed_paths if "chunk" in p]
+    completed_set = set(completed_paths)
+    path_keys = [p.split("/")[-1] for p in paths]
+    path_keys = set(path_keys)
+    remaining_path_idxs = [i for i, p in enumerate(paths) if p.split("/")[-1] not in completed_set]
+    paths = [paths[i] for i in remaining_path_idxs]
+    paths.remove(os.path.join(dataset,"pos_data.pkl"))
+    print("Number of paths remaining: ", len(paths))
     if os.path.exists(os.path.join(output, "current_state/current_state.pkl")) and TRANSITION_TO_MUTLIPROCESS:
         print("Resuming from save")
         current_state = np.load(os.path.join(output, "current_state/current_state.pkl"), allow_pickle=True)
