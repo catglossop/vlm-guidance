@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from typing import List, Dict, Optional, Tuple, Callable, Bool
+from typing import List, Dict, Optional, Tuple, Callable
 from efficientnet_pytorch import EfficientNet
 from model.lelan.self_attention import PositionalEncoding
 
@@ -202,7 +202,7 @@ class LNPMultiModal(nn.Module):
         mha_num_attention_heads: Optional[int] = 2,
         mha_num_attention_layers: Optional[int] = 2,
         mha_ff_dim_factor: Optional[int] = 4,
-        late_fusion: Bool = False,
+        late_fusion: bool = False,
     ) -> None:
         """
         NoMaD ViNT Encoder class
@@ -266,7 +266,7 @@ class LNPMultiModal(nn.Module):
         self.all_masks = torch.cat([self.no_mask, self.imagegoal_mask, self.langgoal_mask], dim=0)
         self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.imagegoal_mask.float()) * ((self.context_size + 3)/(self.context_size + 2)), (1 - self.langgoal_mask.float()) * ((self.context_size + 3)/(self.context_size + 2))], dim=0)
 
-    def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, feat_text: torch.tensor, input_goal_mask: torch.tensor = None):
+    def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, feat_text: torch.tensor, input_goal_mask: torch.tensor = None) -> torch.Tensor:
         device = obs_img.device
         # Get the image goal encoding
         obsgoal_img = torch.cat([obs_img, goal_img], dim=1) # concatenate the obs image/context and goal image --> non image goal?
@@ -336,7 +336,7 @@ class LNPMultiModal(nn.Module):
             obs_encoding_tokens = obs_encoding_tokens * avg_mask
         
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
-        if late_fusion:
+        if self.late_fusion:
             obs_encoding_tokens = torch.cat((obs_encoding_tokens, inst_encoding), dim=1)
 
         if obs_encoding_tokens.shape[1] != self.goal_encoding_size:
