@@ -192,10 +192,10 @@ class NavigateLocal(Node):
         if language_encoder == "clip":
             self.clip_model, self.preprocess = clip.load("ViT-B/32", device=self.device)
         elif language_encoder == "google":
-            self.text_model = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
+            self.google_model = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
         elif language_encoder == "t5":
             self.tokenizer = T5Tokenizer.from_pretrained("google-t5/t5-small")
-            self.model = T5EncoderModel.from_pretrained("google-t5/t5-small")
+            self.t5_model = T5EncoderModel.from_pretrained("google-t5/t5-small")
         else:
             raise ValueError(f"Language encoder {language_encoder} not supported")
     def embed_language(self, language_prompt):
@@ -203,10 +203,10 @@ class NavigateLocal(Node):
             self.clip_language_embedding = clip.tokenize(language_prompt).to(self.device)
             self.clip_language_embedding = self.clip_model.encode_text(self.clip_language_embedding).to(torch.float)
         elif self.language_encoder == "google":
-            self.clip_language_embedding = self.text_model(language_prompt)
+            self.clip_language_embedding = self.google_model(language_prompt)
         elif self.language_encoder == "t5":
             self.clip_language_embedding = self.tokenizer(language_prompt, return_tensors="pt", padding=True)
-            self.clip_language_embedding = self.model(self.clip_language_embedding["input_ids"]).last_hidden_state.mean(dim=1)
+            self.clip_language_embedding = self.t5_model(self.clip_language_embedding["input_ids"]).last_hidden_state.mean(dim=1).to(self.device)
         else:
             raise ValueError(f"Language encoder {self.language_encoder} not supported")
     def load_config(self, robot_config_path):
@@ -290,7 +290,7 @@ class NavigateLocal(Node):
             self.naction = self.nactions[0] 
             self.chosen_waypoint = self.naction[self.args.waypoint] 
         elif self.model_type.split("_")[0] == "lelan":
-            if self.model_type == "lelan_mm":
+            if ("_").join(self.model_type.split("_")[:-1]) == "lelan_mm":
                 mask_image = True
                 goal_img = torch.zeros((1, 3, 96, 96)).to(self.device)
             else:
@@ -299,7 +299,6 @@ class NavigateLocal(Node):
                                                        self.noise_scheduler, 
                                                        self.obs_images.clone(), 
                                                        self.clip_language_embedding.clone(), 
-                                                       self.obs_images[0,...].clone(),
                                                        goal_img,
                                                        self.model_params["len_traj_pred"], 
                                                        2, 

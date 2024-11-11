@@ -39,9 +39,5 @@ tmux send-keys "source ~/create_ws/install/setup.bash" Enter
 tmux send-keys "ros2 service call /reset_pose irobot_create_msgs/srv/ResetPose '{}'" Enter
 tmux send-keys "ros2 run tf2_ros static_transform_publisher -0.1 0 0.4 1.57 0 0 base_link laser_link" Enter
 
-# Launch foxglove
-tmux select-pane -t 4
-tmux send-keys "ros2 launch foxglove_bridge foxglove_bridge_launch.xml" Enter
-
 # Attach to the tmux session
 tmux -2 attach-session -t $session_name

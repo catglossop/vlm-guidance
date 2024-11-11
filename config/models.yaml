@@ -81,4 +81,32 @@ lelan_mm:
   config_path: "../config/lelan_mm_all_gnm.yaml"
   ckpt_path: "model_weights/lelan_mm.pth"
 
+lelan_mm_v2:
+  config_path: "../config/lelan_mm_v2.yaml"
+  ckpt_path: "model_weights/lelan_mm_v2.pth"
+
+lelan_mm_v3_lf_30:
+  config_path: "../config/lelan_mm_v3.yaml"
+  ckpt_path: "model_weights/lelan_mm_v3_lf_30.pth"
+
+lelan_mm_v3_lf_60:
+  config_path: "../config/lelan_mm_v3.yaml"
+  ckpt_path: "model_weights/lelan_mm_v3_lf_60.pth"
+
+lelan_mm_v3_lf_90:
+  config_path: "../config/lelan_mm_v3.yaml"
+  ckpt_path: "model_weights/lelan_mm_v3_lf_90.pth"
+
+lelan_mm_v4_30:
+  config_path: "../config/lelan_mm_v4.yaml"
+  ckpt_path: "model_weights/lelan_mm_v4_30.pth"
+
+lelan_mm_v4_60:
+  config_path: "../config/lelan_mm_v4.yaml"
+  ckpt_path: "model_weights/lelan_mm_v4_60.pth"
+
+lelan_mm_v4_90:
+  config_path: "../config/lelan_mm_v4.yaml"
+  ckpt_path: "model_weights/lelan_mm_v4_90.pth"
+
 # add your own model configs here after saving the *.pth file to ../model_weight

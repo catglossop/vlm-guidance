@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from typing import List, Dict, Optional, Tuple, Callable
+from typing import List, Dict, Optional, Tuple, Callable, Bool
 from efficientnet_pytorch import EfficientNet
 from model.lelan.self_attention import PositionalEncoding
 
@@ -202,6 +202,7 @@ class LNPMultiModal(nn.Module):
         mha_num_attention_heads: Optional[int] = 2,
         mha_num_attention_layers: Optional[int] = 2,
         mha_ff_dim_factor: Optional[int] = 4,
+        late_fusion: Bool = False,
     ) -> None:
         """
         NoMaD ViNT Encoder class
@@ -212,6 +213,7 @@ class LNPMultiModal(nn.Module):
         self.goal_encoding_size = obs_encoding_size//4
         self.context_size = context_size
         self.goal_mask_prob = goal_mask_prob
+        self.late_fusion = late_fusion
 
         # Initialize FiLM Model
         self.film_model = make_model(self.lang_encoding_size, 3*(self.context_size+1), 8, 128, self.goal_encoding_size)
@@ -334,7 +336,8 @@ class LNPMultiModal(nn.Module):
             obs_encoding_tokens = obs_encoding_tokens * avg_mask
         
         obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
-        obs_encoding_tokens = torch.cat((obs_encoding_tokens, inst_encoding), dim=1)
+        if late_fusion:
+            obs_encoding_tokens = torch.cat((obs_encoding_tokens, inst_encoding), dim=1)
 
         if obs_encoding_tokens.shape[1] != self.goal_encoding_size:
             obs_encoding_tokens = self.compress_final_enc(obs_encoding_tokens)
