@@ -44,9 +44,9 @@ def main(config):
             config["gpu_ids"] = [0]
         elif type(config["gpu_ids"]) == int:
             config["gpu_ids"] = [config["gpu_ids"]]
-        os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
-            [str(x) for x in config["gpu_ids"]]
-        )
+        # os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
+        #     [str(x) for x in range(8)]
+        # )
         print("Using cuda devices:", os.environ["CUDA_VISIBLE_DEVICES"])
     else:
         print("Using cpu")
@@ -204,6 +204,7 @@ def main(config):
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
                 mha_ff_dim_factor=config["mha_ff_dim_factor"],
+                late_fusion=config["late_fusion"]
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
     else:
