@@ -204,6 +204,7 @@ def main(config):
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
                 mha_ff_dim_factor=config["mha_ff_dim_factor"],
+                late_fusion=config["late_fusion"]
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
     else:
