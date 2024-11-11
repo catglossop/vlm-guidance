@@ -8,5 +8,6 @@ deployment/model_weights/
 *.jpg
 *.png
 *.jpg
+*.tar
 data/data_annotation/lcbc_datasets/
 
