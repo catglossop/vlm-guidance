@@ -6,7 +6,7 @@ use_wandb: True # set to false if you don't want to log to wandb
 train: True
 batch_size: 256
 epochs: 200
-gpu_ids: [0]
+gpu_ids: [3]
 num_workers: 12
 lr: 1e-4
 optimizer: adamw
