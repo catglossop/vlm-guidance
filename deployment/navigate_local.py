@@ -290,7 +290,7 @@ class NavigateLocal(Node):
             self.naction = self.nactions[0] 
             self.chosen_waypoint = self.naction[self.args.waypoint] 
         elif self.model_type.split("_")[0] == "lelan":
-            if ("_").join(self.model_type.split("_")[:-1]) == "lelan_mm":
+            if ("_").join(self.model_type.split("_")[:2]) == "lelan_mm":
                 mask_image = True
                 goal_img = torch.zeros((1, 3, 96, 96)).to(self.device)
             else:
