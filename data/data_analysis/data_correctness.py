@@ -7,6 +7,7 @@ from tqdm import tqdm
 import argparse
 import matplotlib.pyplot as plt
 from copy import deepcopy
+import cv2
 
 DATA_PATH = ["/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled/", 
              "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled/",
@@ -19,6 +20,15 @@ reason_map = {1: "Incorrect objects/structures", 2: "Incorrect motion", 3: "Inco
 def create_gif_from_path(path):
     images = [PILImage.open(f) for f in sorted(glob.glob(path + "/*.jpg"), key=lambda x: int(x.split('/')[-1].split('.')[0]))]
     images[0].save("trajectory.gif", save_all=True, append_images=images[1:], duration=100, loop=0)
+    videodims = (100,100)
+    fourcc = cv2.VideoWriter_fourcc(*'avc1')    
+    video = cv2.VideoWriter("trajectory.mp4",fourcc, 60)
+    #draw stuff that goes on every frame here
+    for img in images:
+        imtemp = img.copy()
+        # draw frame specific stuff here.
+        video.write(cv2.cvtColor(np.array(imtemp), cv2.COLOR_RGB2BGR))
+    video.release()
 
 def load_data_from_path(path):
     traj_data = pkl.load(open(path + "/traj_data.pkl", "rb"))
