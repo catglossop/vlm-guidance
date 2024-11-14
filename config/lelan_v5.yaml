@@ -1,12 +1,12 @@
 project_name: lcbc
-run_name: lelan
+run_name: lelan_multi_modal
 
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
 train: True
-batch_size: 128
+batch_size: 256
 epochs: 200
-gpu_ids: [0]
+gpu_ids: [3]
 num_workers: 12
 lr: 1e-4
 optimizer: adamw
@@ -22,11 +22,11 @@ seed: 0
 
 # model params
 model: lnp
-model_type: lnp
-clip_model_type: ViT-B/32
-vision_encoder: lnp_clip_film
+model_type: lnp_multi_modal
+language_encoder: t5
+vision_encoder: lnp_multi_modal
 efficientnet_model: efficientnet-b2
-encoding_size: 512
+encoding_size: 256
 obs_encoding_size: 1024
 lang_encoding_size: 512
 obs_encoder: efficientnet-b0
@@ -41,7 +41,8 @@ cond_predict_scale: False
 down_dims: [64, 128, 256]
 num_diffusion_iters: 15
 linear_output: False
-goal_mask_prob: 0.0
+goal_mask_prob: 0.7
+late_fusion: False
 
 # normalization for the action space
 normalize: True
@@ -49,7 +50,7 @@ normalize: True
 # context
 context_type: temporal
 context_size: 5 # 5
-alpha: 1e-4
+alpha: 0.5
 
 # distance bounds for distance and action and distance predictions 
 distance:
@@ -67,28 +68,60 @@ learn_angle: False
 image_size: [96, 96] # width, height
 datasets:
   sacson_labelled:
-    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled/
-    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_labelled/train/ # path to train folder with traj_names.txt
-    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_labelled/test/ # path to test folder with traj_names.txt
+    data_folder: /home/cglossop/lcbc_datasets/sacson_labelled/
+    train: /home/cglossop/vlm-guidance/data/data_splits/sacson_labelled/train/ # path to train folder with traj_names.txt
+    test: /home/cglossop/vlm-guidance/data/data_splits/sacson_labelled/test/ # path to test folder with traj_names.txt
     end_slack: 0 # because many trajectories end in collisions
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: True # negative mining from the ViNG paper (Shah et al.)
     weight: 0.5
   cory_hall_labelled:
-    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled/
-    train: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_labelled/train/ # path to train folder with traj_names.txt
-    test: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_labelled/test/ # path to test folder with traj_names.txt
+    data_folder: /home/cglossop/lcbc_datasets/cory_hall_labelled/
+    train: /home/cglossop/vlm-guidance/data/data_splits/cory_hall_labelled/train/ # path to train folder with traj_names.txt
+    test: /home/cglossop/vlm-guidance/data/data_splits/cory_hall_labelled/test/ # path to test folder with traj_names.txt
     end_slack: 0 # because many trajectories end in collisions
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: True # negative mining from the ViNG paper (Shah et al.)
     weight: 0.5
   go_stanford_labelled:
-    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled/
-    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_labelled/train/ # path to train folder with traj_names.txt
-    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_labelled/test/ # path to test folder with traj_names.txt
+    data_folder: /home/cglossop/lcbc_datasets/go_stanford_cropped_labelled/
+    train: /home/cglossop/vlm-guidance/data/data_splits/go_stanford_labelled/train/ # path to train folder with traj_names.txt
+    test: /home/cglossop/vlm-guidance/data/data_splits/go_stanford_labelled/test/ # path to test folder with traj_names.txt
     end_slack: 0 # because many trajectories end in collisions
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: True # negative mining from the ViNG paper (Shah et al.)
+    weight: 0.5
+  recon:
+    data_folder: /home/cglossop/lcbc_datasets/recon
+    train: /home/cglossop/vlm-guidance/data/data_splits/recon/train/ # path to train folder with traj_names.txt
+    test: /home/cglossop/vlm-guidance/data/data_splits/recon/test/ # path to test folder with traj_names.txt
+    end_slack: 3 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: True # negative mining from the ViNG paper (Shah et al.)
+    weight: 0.2
+  tartan_drive:
+    data_folder: /home/cglossop/lcbc_datasets/tartan_drive/
+    train: /home/cglossop/vlm-guidance/data/data_splits/tartan_drive/train/
+    test: /home/cglossop/vlm-guidance/data/data_splits/tartan_drive/test/
+    end_slack: 3 # because many trajectories end in collisions
+    goals_per_obs: 1
+    negative_mining: True
+    weight: 0.2
+  seattle:
+    data_folder: /home/cglossop/lcbc_datasets/seattle/
+    train: /home/cglossop/vlm-guidance/data/data_splits/seattle/train/
+    test: /home/cglossop/vlm-guidance/data/data_splits/seattle/test/
+    end_slack: 0
+    goals_per_obs: 1
+    negative_mining: True
+    weight: 0.2
+  scand_labelled:
+    data_folder: /home/cglossop/lcbc_datasets/scand_labelled/
+    train: /home/cglossop/vlm-guidance/data/data_splits/scand_labelled/train/
+    test: /home/cglossop/vlm-guidance/data/data_splits/scand_labelled/test/
+    end_slack: 0
+    goals_per_obs: 1
+    negative_mining: True
     weight: 0.5
 
 # logging stuff
