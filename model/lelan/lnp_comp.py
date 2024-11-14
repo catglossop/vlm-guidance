@@ -318,8 +318,10 @@ class LNPMultiModal(nn.Module):
             obs_encoding_final = torch.zeros(obslang_encoding.shape).to(device)
             obs_encoding_final[input_goal_mask == -1] = obs_encoding[input_goal_mask == -1]
             obs_encoding_final[input_goal_mask != -1] = obslang_encoding[input_goal_mask != -1]
+        else:
+            obs_encoding_final = obslang_encoding
         # Create the goal_mask: 0 = no mask, 1 = mask
-        obsgoal_encoding = torch.cat((obs_encoding, obsgoal_encoding), dim=1)  
+        obsgoal_encoding = torch.cat((obs_encoding_final, obsgoal_encoding), dim=1)  
         if len(obsgoal_encoding.shape) == 2:
             obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size   
@@ -334,7 +336,7 @@ class LNPMultiModal(nn.Module):
             no_goal_mask[no_goal_mask == -1] = 0
             goal_select = torch.ones(no_goal_mask.shape, dtype=torch.bool)
             no_goal_mask = no_goal_mask * goal_select.to(device)
-            # no_goal_mask[input_goal_mask == -1] = 2 # mask out the lanuage goal as there is not language
+            no_goal_mask[input_goal_mask == -1] = 2 # mask out the lanuage goal as there is not language
             # print(f"Neither masked: {torch.round(torch.sum(no_goal_mask == 0)/no_goal_mask.shape[0]*100, decimals=3)}%")
             # print(f"Image masked: {torch.round(torch.sum(no_goal_mask == 1)/no_goal_mask.shape[0]*100, decimals=3)}%")
             # print(f"Language masked: {torch.round(torch.sum(input_goal_mask == -1)/no_goal_mask.shape[0]*100, decimals=3)}%")
