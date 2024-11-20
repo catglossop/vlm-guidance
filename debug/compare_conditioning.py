@@ -120,7 +120,6 @@ def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding
     if linear_output:
         return model(context.clone(), prompt_embedding).detach().cpu().numpy()
     else:
-        print(context.shape)
         return model_output_diffusion_eval(model, noise_scheduler, context.clone(), prompt_embedding, goal_img, pred_horizon, action_dim, num_samples, batch_size, device, mask_image)["actions"].detach().cpu().numpy()
         
 def main(args): 
@@ -242,19 +241,28 @@ def main(args):
     context = transform_images(context_orig, IMAGE_SIZE).to(args.device)
     viz_context = transform_images(context_orig, VISUALIZATION_IMAGE_SIZE)
     viz_img = transform_images(context_orig[-1], VISUALIZATION_IMAGE_SIZE)[0] 
-    with torch.no_grad():
-        if config["model_type"] == "rft":
-            output_1 = model(context.clone(), prompt_embedding_1).detach().cpu().numpy()
-            output_2 = model(context.clone(), prompt_embedding_2).detach().cpu().numpy()
-        elif config["model_type"] == "lnp":
-            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
-            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
-        elif config["model_type"] == "lnp_multi_modal":
-            mask_image = True
-            goal_img = torch.zeros((1, 3, 96, 96)).to(args.device)
-            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
-            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
-    compare_output(output_1, output_2, viz_img, args.prompt_1, args.prompt_2, viz_context)
+    retry = True
+    while retry:
+        with torch.no_grad():
+            if config["model_type"] == "rft":
+                output_1 = model(context.clone(), prompt_embedding_1).detach().cpu().numpy()
+                output_2 = model(context.clone(), prompt_embedding_2).detach().cpu().numpy()
+            elif config["model_type"] == "lnp":
+                output_1 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+                output_2 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+            elif config["model_type"] == "lnp_multi_modal":
+                mask_image = True
+                goal_img = torch.zeros((1, 3, 96, 96)).to(args.device)
+                output_1 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
+                output_2 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
+        
+            compare_output(output_1, output_2, viz_img, args.prompt_1, args.prompt_2, viz_context)
+        check = input("Retry? (y/n)")
+        if check == "y":
+            retry = True
+        else:
+            retry = False
+
 
 
 if __name__ == "__main__":
