@@ -514,7 +514,7 @@ def train_lnp(
             print(torch.argwhere(torch.sum(lang_embedding, dim=1) == 0))
             breakpoint()
             goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
-            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
+            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding, input_goal_mask=None)
 
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
@@ -892,7 +892,6 @@ def train_lnp_multimodal(
                 dataset_index,
                 action_mask,
             ) = data
-            breakpoint()
             obs_images = torch.split(obs_image, 3, dim=1)
             viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
             viz_goal_image = TF.resize(goal_image, VISUALIZATION_IMAGE_SIZE)
@@ -909,7 +908,7 @@ def train_lnp_multimodal(
             B = obs_image.size(0)
             goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
             goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
-            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
+            obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=None)
             
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
@@ -1111,7 +1110,7 @@ def evaluate_lnp_multimodal(
             B = obs_image.size(0)
             goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
             goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
-            obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=goal_mask)
+            obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=None)
 
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
@@ -1268,7 +1267,7 @@ def model_output_diffusion(
     goal_mask=None,
 ):
     
-    obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=goal_mask)
+    obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=None)
     obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
 
@@ -1315,11 +1314,11 @@ def model_output_diffusion_eval(
         input_goal_mask = torch.ones(batch_size, device=device)
 
     if batch_goal_images is not None:
-        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=input_goal_mask)
+        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=None)
         obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
         obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
     else:
-        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=batch_lang_embeddings, input_goal_mask=input_goal_mask)
+        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=batch_lang_embeddings, input_goal_mask=None)
         obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
         obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
 

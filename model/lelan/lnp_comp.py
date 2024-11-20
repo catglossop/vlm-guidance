@@ -337,9 +337,9 @@ class LNPMultiModal(nn.Module):
             goal_select = torch.ones(no_goal_mask.shape, dtype=torch.bool)
             no_goal_mask = no_goal_mask * goal_select.to(device)
             no_goal_mask[input_goal_mask == -1] = 2 # mask out the lanuage goal as there is not language
-            # print(f"Neither masked: {torch.round(torch.sum(no_goal_mask == 0)/no_goal_mask.shape[0]*100, decimals=3)}%")
-            # print(f"Image masked: {torch.round(torch.sum(no_goal_mask == 1)/no_goal_mask.shape[0]*100, decimals=3)}%")
-            # print(f"Language masked: {torch.round(torch.sum(input_goal_mask == -1)/no_goal_mask.shape[0]*100, decimals=3)}%")
+            print(f"Neither masked: {torch.round(torch.sum(no_goal_mask == 0)/no_goal_mask.shape[0]*100, decimals=3)}%")
+            print(f"Image masked: {torch.round(torch.sum(no_goal_mask == 1)/no_goal_mask.shape[0]*100, decimals=3)}%")
+            print(f"Language masked: {torch.round(torch.sum(input_goal_mask == -1)/no_goal_mask.shape[0]*100, decimals=3)}%")
             src_key_padding_mask = torch.index_select(self.all_masks.to(device), 0, no_goal_mask)
         else:
             src_key_padding_mask = None
