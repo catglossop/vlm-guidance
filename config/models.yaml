@@ -117,5 +117,12 @@ lelan_mm_v7_30:
   config_path: "../config/lelan_v5.yaml"
   ckpt_path: "model_weights/lelan_mm_v7_ckpt_30.pth"
 
+lelan_mm_pred_20_ckpt_50:
+  config_path: "../config/lelan_mm_pred_20.yaml"
+  ckpt_path: "model_weights/lelan_mm_pred_20_ckpt_50.pth"
+
+lelan_mm_pred_20_ckpt_100:
+  config_path: "../config/lelan_mm_pred_20.yaml"
+  ckpt_path: "model_weights/lelan_mm_pred_20_ckpt_100.pth"
 
 # add your own model configs here after saving the *.pth file to ../model_weight

@@ -1,0 +1,12 @@
+```json
+{
+  "instructions": [
+    "Pick up sushi",
+    "Move sushi away",
+    "Pick up broccoli",
+    "Hold broccoli",
+    "Reposition broccoli"
+  ],
+  "reasoning": "The robot arm initially appears focused on picking up and interacting with the sushi, as indicated by its central position above the sushi pieces. The subsequent shift in focus from the sushi to the broccoli suggests that the sushi has been moved aside. The robot's attention then centers on the broccoli, indicating a task involving picking up and potentially repositioning it within the workspace, demonstrated by the close proximity and direct interaction with the grippers."
+}
+```

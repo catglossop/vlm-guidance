@@ -49,7 +49,12 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
                             shape=(1,),
                             dtype=np.float64,
                             doc='Robot yaw',
-                        )
+                        ),
+                        'yaw_rotmat': tfds.features.Tensor(
+                            shape=(3, 3),
+                            dtype=np.float64,
+                            doc='Robot yaw rotation matrix',
+                        ),
 
                     }),
                     'action': tfds.features.Tensor(
@@ -103,13 +108,13 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets'),
-            #'val': self._generate_examples(path='data/val/episode_*.npy'),
+            'train': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/train'),
+            'val': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/val'),
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:
+        id_iter = 0
         """Generator of examples for each split."""
-
         def _get_folder_names(data_dir):
             folder_names = [
                 f for f in os.listdir(data_dir)
@@ -208,80 +213,91 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
             data = np.load(data_path, allow_pickle=True)     # this is a list of dicts in our case
 
             # assemble episode --> here we're assuming demos so we set reward to 1 at the end
-            episode = []
-            for i in range(len(data['position'])):
-                # compute Kona language embedding
-                language_instruction = 'Navigate to the goal.'
-                language_embedding = self._embed([language_instruction])[0].numpy()
+            samples = []
+            successes = []
+            episode_paths = []
+            for j in range(len(data["language_annotations"])):
+                episode = []
+                for i in range(len(data['position'])):
+                    # compute Kona language embedding
+                    language_instruction = data['language_annotations'][j]["traj_description"]
+                    # language_embedding = self._embed([language_instruction])[0].numpy()
+                    language_embedding = np.zeros(512, dtype=np.float32)
 
-                #Get image observation
-                image_path = f'{i}.jpg'
-                img = _process_image(os.path.join(episode_path, image_path), mode='stretch')
+                    #Get image observation
+                    image_path = f'{i}.jpg'
+                    img = _process_image(os.path.join(episode_path, image_path), mode='stretch')
 
-                #Get state observation
-                position = data['position'][i]
-                yaw = data['yaw'][i].reshape(-1)
-                state = np.concatenate((position, yaw))
+                    #Get state observation
+                    position = data['position'][i]
+                    yaw = data['yaw'][i].reshape(-1)
+                    state = np.concatenate((position, yaw))
+                    yaw_rotmat = _yaw_rotmat(yaw[0])
 
-                #Recover action(s)
-                action, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
-                    waypoint_spacing=1, learn_angle=False, normalize=False) 
-                action_angle, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
-                    waypoint_spacing=1, learn_angle=True, normalize=False)
-                action = action[0]
-                action_angle = action_angle[0]
-                #action = actions[0]
-                #action = np.concatenate((action, [0, 0, 0, 0, 0]))
+                    #Recover action(s)
+                    action, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
+                        waypoint_spacing=1, learn_angle=False, normalize=False) 
+                    action_angle, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
+                        waypoint_spacing=1, learn_angle=True, normalize=False)
+                    action = action[0]
+                    action_angle = action_angle[0]
+                    #action = actions[0]
+                    #action = np.concatenate((action, [0, 0, 0, 0, 0]))
 
-                episode.append({
-                    'observation': {
-                        'image': img,
-                        'state': state,
-                        'position': position,
-                        'yaw': yaw
-                    },
-                    'action': action,
-                    'action_angle': action_angle,
-                    'discount': 1.0,
-                    'reward': float(i == (len(data['position']) - 1)),
-                    'is_first': i == 0,
-                    'is_last': i == (len(data['position']) - 1),
-                    'is_terminal': i == (len(data) - 1),
-                    'language_instruction': language_instruction,
-                    'language_embedding': language_embedding,
-                })
+                    episode.append({
+                        'observation': {
+                            'image': img,
+                            'state': state,
+                            'position': position,
+                            'yaw': yaw,
+                            'yaw_rotmat': yaw_rotmat,
+                        },
+                        'action': action,
+                        'action_angle': action_angle,
+                        'discount': 1.0,
+                        'reward': float(i == (len(data['position']) - 1)),
+                        'is_first': i == 0,
+                        'is_last': i == (len(data['position']) - 1),
+                        'is_terminal': i == (len(data) - 1),
+                        'language_instruction': language_instruction,
+                        'language_embedding': language_embedding,
+                    })
 
-            # create output data sample
-            sample = {
-                'steps': episode,
-                'episode_metadata': {
-                    'file_path': episode_path
+                # create output data sample
+                sample = {
+                    'steps': episode,
+                    'episode_metadata': {
+                        'file_path': episode_path
+                    }
                 }
-            }
 
-            success = len(data['position']) >= 1
+                success = len(data['position']) >= 1
+
+                samples.append(sample)
+                successes.append(success)
+                episode_paths.append(episode_path)
 
             # if you want to skip an example for whatever reason, simply return None
-            return episode_path, sample, success
+            return episode_paths, samples, successes
 
-        print(path)
         dataset_names = os.listdir(path)
-        print(dataset_names)
         episode_paths = dict()
         for name in dataset_names:
             episode_paths[name] = _get_folder_names(os.path.join(path, name))
 
-
+        # print("START PARSING")
         # for smallish datasets, use single-thread parsing
         for name, paths in episode_paths.items():
             for sample in paths:
-                episode_path, sample, success = _parse_example(os.path.join(path, name, sample))
-                if success:
-                    yield episode_path, sample
+                episode_paths, samples, successes = _parse_example(os.path.join(path, name, sample))
+                for episode_path, sample, success in zip(episode_paths, samples, successes):
+                    if success:
+                        id_iter += 1
+                        yield episode_path + str(id_iter), sample
 
-        # for large datasets use beam to parallelize data parsing (this will have initialization overhead)
+        # # for large datasets use beam to parallelize data parsing (this will have initialization overhead)
         # beam = tfds.core.lazy_imports.apache_beam
         # return (
         #         beam.Create(episode_paths)
-        #         | beam.Map(_parse_example)
+        #         | beam.Map(output_samples)
         # )

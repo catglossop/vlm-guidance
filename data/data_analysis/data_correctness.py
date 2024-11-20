@@ -8,6 +8,7 @@ import argparse
 import matplotlib.pyplot as plt
 from copy import deepcopy
 import cv2
+import random
 
 DATA_PATH = ["/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled/", 
              "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled/",
@@ -20,9 +21,9 @@ reason_map = {1: "Incorrect objects/structures", 2: "Incorrect motion", 3: "Inco
 def create_gif_from_path(path):
     images = [PILImage.open(f) for f in sorted(glob.glob(path + "/*.jpg"), key=lambda x: int(x.split('/')[-1].split('.')[0]))]
     images[0].save("trajectory.gif", save_all=True, append_images=images[1:], duration=100, loop=0)
-    videodims = (100,100)
+    videodims = (images[0].width, images[0].height)
     fourcc = cv2.VideoWriter_fourcc(*'avc1')    
-    video = cv2.VideoWriter("trajectory.mp4",fourcc, 60)
+    video = cv2.VideoWriter("trajectory.mp4",fourcc, 60, videodims)
     #draw stuff that goes on every frame here
     for img in images:
         imtemp = img.copy()
@@ -132,12 +133,13 @@ def check_results():
         for reason in results[dataset]["incorrect_reasons"]:
             print(f"Reason {reason}: {results[dataset]['incorrect_reasons'][reason]}")
         print("-------------------------------------")
-
+    plt.savefig("data_analysis_results.png")
     plt.show()
 
 # Function for looping through paths
 def main(args):
     paths, _ = load_dataset()
+    random.shuffle(paths)
     if args.reevaluate:
         for path in paths:
             if os.path.exists(path + "/analysis.pkl"):
