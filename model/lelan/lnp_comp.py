@@ -216,7 +216,8 @@ class LNPMultiModal(nn.Module):
         self.late_fusion = late_fusion
 
         # Initialize FiLM Model
-        self.film_model = make_model(self.lang_encoding_size, 3*(self.context_size+1), 8, 128, self.goal_encoding_size)
+        self.film_model = make_model(self.lang_encoding_size, 3, 8, 128, self.goal_encoding_size)
+        # self.film_model = make_model(self.lang_encoding_size, 3*(self.context_size +1), 8, 128, self.goal_encoding_size)
 
         # Initialize the observation encoder
         if obs_encoder.split("-")[0] == "efficientnet":
@@ -246,7 +247,7 @@ class LNPMultiModal(nn.Module):
         self.compress_final_enc = nn.Linear(self.goal_encoding_size + self.lang_encoding_size, self.goal_encoding_size)
         
         # Initialize positional encoding and self-attention layers
-        self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=8) #no context
+        self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=7) #no context
         self.sa_layer = nn.TransformerEncoderLayer(
             d_model=self.goal_encoding_size, 
             nhead=mha_num_attention_heads, 
@@ -258,16 +259,22 @@ class LNPMultiModal(nn.Module):
         self.sa_encoder = nn.TransformerEncoder(self.sa_layer, num_layers=mha_num_attention_layers)
 
         # Definition of the goal mask (convention: 0 = no mask, 1 = mask)
-        self.langgoal_mask = torch.zeros((1, self.context_size + 3), dtype=torch.bool)
-        self.imagegoal_mask = torch.zeros((1, self.context_size + 3), dtype=torch.bool)
-        self.no_mask = torch.zeros((1, self.context_size + 3), dtype=torch.bool) # Mask out neither goal
-        self.langgoal_mask[:, -1] = True # Mask out the language goal
-        self.imagegoal_mask[:, -2] = True # Mask out the image goal 
-        self.all_masks = torch.cat([self.no_mask, self.imagegoal_mask, self.langgoal_mask], dim=0)
-        self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.imagegoal_mask.float()) * ((self.context_size + 3)/(self.context_size + 2)), (1 - self.langgoal_mask.float()) * ((self.context_size + 3)/(self.context_size + 2))], dim=0)
+        # self.langgoal_mask = torch.zeros((1, self.context_size + 3), dtype=torch.bool)
+        # self.imagegoal_mask = torch.zeros((1, self.context_size + 3), dtype=torch.bool)
+        # self.no_mask = torch.zeros((1, self.context_size + 3), dtype=torch.bool) # Mask out neither goal
+        self.imagegoal_mask = torch.zeros((1, self.context_size + 2), dtype=torch.bool)
+        self.no_mask = torch.zeros((1, self.context_size + 2), dtype=torch.bool) # Mask out neither goal
+        # self.langgoal_mask[:, -1] = True # Mask out the language goal
+        # self.imagegoal_mask[:, -2] = True # Mask out the image goal 
+        self.imagegoal_mask[:, -1] = True # Mask out the image goal
+        # self.all_masks = torch.cat([self.no_mask, self.imagegoal_mask, self.langgoal_mask], dim=0)
+        self.all_masks = torch.cat([self.no_mask, self.imagegoal_mask], dim=0)
+        # self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.imagegoal_mask.float()) * ((self.context_size + 3)/(self.context_size + 2)), (1 - self.langgoal_mask.float()) * ((self.context_size + 3)/(self.context_size + 2))], dim=0)
+        self.avg_pool_mask = torch.cat([1 - self.no_mask.float(), (1 - self.imagegoal_mask.float()) * ((self.context_size + 3)/(self.context_size + 2))], dim=0)
 
     def forward(self, obs_img: torch.tensor, goal_img: torch.tensor, feat_text: torch.tensor, input_goal_mask: torch.tensor = None) -> torch.Tensor:
         device = obs_img.device
+        B = obs_img.shape[0]
         # Get the image goal encoding
         obsgoal_img = torch.cat([obs_img, goal_img], dim=1) # concatenate the obs image/context and goal image --> non image goal?
         obsgoal_encoding = self.goal_encoder.extract_features(obsgoal_img) # get encoding of this img 
@@ -283,14 +290,15 @@ class LNPMultiModal(nn.Module):
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size
         
         inst_encoding = feat_text
+        # obslang_encoding = self.film_model(obs_img, inst_encoding).unsqueeze(1)
 
         # Get obslang encoding
         obslang_encodings = []
-        for img_idx in range(obs_img.shape[0]):
-            obslang_encoding = self.film_model(obs_img[img_idx,...].unsqueeze(0), inst_encoding).unsqueeze(1)
+        for img_idx in range(obs_img.shape[1]//3):
+            obs_i = obs_img[:, 3*img_idx:3*(img_idx+1),:]
+            obslang_encoding = self.film_model(obs_i, inst_encoding).unsqueeze(1)
             obslang_encodings.append(obslang_encoding)
         obslang_encoding = torch.cat(obslang_encodings, dim=1)
-        breakpoint()
 
         # Get obs encoding
         obs_img = obs_img.reshape(-1, 3, obs_img.shape[-2], obs_img.shape[-1])
@@ -304,9 +312,16 @@ class LNPMultiModal(nn.Module):
         obs_encoding = obs_encoding.reshape((self.context_size+1, -1, self.goal_encoding_size))
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
 
+        # combine obs_encoding and obslang_encoding
+        obs_encodings = torch.cat([obs_encoding.unsqueeze(0), obslang_encoding.unsqueeze(0)], dim=0)
+        if input_goal_mask is not None:
+            obs_encoding_final = torch.zeros(obslang_encoding.shape).to(device)
+            obs_encoding_final[input_goal_mask == -1] = obs_encoding[input_goal_mask == -1]
+            obs_encoding_final[input_goal_mask != -1] = obslang_encoding[input_goal_mask != -1]
+        else:
+            obs_encoding_final = obslang_encoding
         # Create the goal_mask: 0 = no mask, 1 = mask
-        goal_mask = torch.zeros((1, self.context_size + 2), dtype=torch.bool)
-        obsgoal_encoding = torch.cat((obs_encoding, obslang_encoding, obsgoal_encoding), dim=1)  
+        obsgoal_encoding = torch.cat((obs_encoding_final, obsgoal_encoding), dim=1)  
         if len(obsgoal_encoding.shape) == 2:
             obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size   
@@ -318,12 +333,13 @@ class LNPMultiModal(nn.Module):
         # If a goal mask is provided
         if input_goal_mask is not None:
             no_goal_mask = input_goal_mask.long() # (B, ) which is 1 is goal is masked and 0 otherwise
+            no_goal_mask[no_goal_mask == -1] = 0
             goal_select = torch.ones(no_goal_mask.shape, dtype=torch.bool)
             no_goal_mask = no_goal_mask * goal_select.to(device)
-            # no_goal_mask[input_goal_mask == -1] = 2 # mask out the lanuage goal as there is not language
-            print(f"Neither masked: {torch.round(torch.sum(no_goal_mask == 0)/no_goal_mask.shape[0]*100, decimals=3)}%")
-            print(f"Image masked: {torch.round(torch.sum(no_goal_mask == 1)/no_goal_mask.shape[0]*100, decimals=3)}%")
-            print(f"Language masked: {torch.round(torch.sum(input_goal_mask == -1)/no_goal_mask.shape[0]*100, decimals=3)}%")
+            no_goal_mask[input_goal_mask == -1] = 2 # mask out the lanuage goal as there is not language
+            # print(f"Neither masked: {torch.round(torch.sum(no_goal_mask == 0)/no_goal_mask.shape[0]*100, decimals=3)}%")
+            # print(f"Image masked: {torch.round(torch.sum(no_goal_mask == 1)/no_goal_mask.shape[0]*100, decimals=3)}%")
+            # print(f"Language masked: {torch.round(torch.sum(input_goal_mask == -1)/no_goal_mask.shape[0]*100, decimals=3)}%")
             src_key_padding_mask = torch.index_select(self.all_masks.to(device), 0, no_goal_mask)
         else:
             src_key_padding_mask = None
@@ -599,7 +615,6 @@ class FiLM(nn.Module):
             
             x = torch.cat([x, coordinate_x, coordinate_y], 1)
             x = res_block(x, beta, gamma)
-            print(x.shape)
         
         feature = self.feature_extractor_last(x)
         if len(feature.shape) != 2:
