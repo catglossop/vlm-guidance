@@ -3,11 +3,13 @@ wandb/
 pycache/
 *.pyc
 data/data_splits/
+lcbc_datasets_backup/
 lcbc.egg-info
 deployment/model_weights/
 *.jpg
 *.png
 *.jpg
 *.tar
+*.gif
 data/data_annotation/lcbc_datasets/
 

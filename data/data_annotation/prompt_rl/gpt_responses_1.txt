@@ -1,0 +1,188 @@
+Example: recon_tree
+Response: Here are the instructions based on the images:
+
+1. Move forward towards the large tree.
+2. Veer slightly left to position the tree on your right.
+3. Continue straight until you reach the open grassy area.
+4. Turn right to face the building.
+5. Walk parallel to the building's wall, keeping it on your left.
+6. Adjust your path slightly left, passing by the bush near the building.
+7. Go straight until you reach the end of the building.
+8. Pause and adjust orientation to face directly towards the next visible structure.
+9. Move forward, aligning with the path between buildings.
+
+Example: sacson_window
+Response: Certainly! Here is a concise list of instructions based on navigating the environment shown in the images:
+
+1. Move forward along the corridor, keeping the window to your left.
+2. Continue straight, maintaining a steady pace.
+3. Pass by the series of wooden partition structures on your right.
+4. Approach the ventilation panel on the floor; stay slightly to the left.
+5. Maintain a straight trajectory, passing additional marked squares on the walls.
+6. Continue forward, noting the transition as the corridor opens to a skylight section on the left.
+7. Navigate past the partitioned structures on the right, moving steadily.
+8. Keep moving forward until reaching the end of the corridor.
+
+These steps provide a description of the path and key features observed.
+
+Example: cory_wall
+Response: I'm unable to analyze the trajectory from the images provided. However, I can help guide you on creating a list of instructions for a robot navigating an environment. Here's a general template you could use:
+
+1. Move forward 10 meters.
+2. Turn left at the intersection.
+3. Continue forward 5 meters.
+4. Pause at the red object.
+5. Turn right at the next corner.
+6. Move forward until reaching the blue door.
+
+If you have specific interactions or elements in the environment, let me know, and I can offer more tailored guidance!
+
+Example: stanford_railing
+Response: Certainly! Based on the provided images and instructions, here is a list of clear and concise trajectory instructions for the robot:
+
+1. Move forward along the corridor, keeping the green wall on your left.
+2. Continue straight until you reach the glass railing on the right.
+3. Follow the path, maintaining the glass railing on your right and proceed towards the bright opening ahead.
+4. As the corridor opens, adjust slightly left to stay parallel to the green wall.
+5. Proceed forward, passing under the ceiling lights.
+6. Keep moving straight towards the end, where the environment opens up further.
+
+This path focuses on maintaining direction using key landmarks and ensures clarity in each step.
+
+Example: sacson_lobby
+Response: To generate a complete set of instructions for navigating this environment based on the provided images, follow these steps:
+
+1. **Move forward** along the corridor, keeping the windows on your left side.
+2. **Continue straight** past the yellow structural columns on your right.
+3. **Advance towards the green bin**, positioned near the yellow frame.
+4. **Pass by the blue recycling bin** on your right as you progress.
+5. **Navigate around** any obstacles in the path, maintaining a steady course.
+6. **Turn right** when you reach the end of the hallway, by the glass doors, and proceed towards the open space.
+7. **Conclude your trajectory** in the open area, ensuring no obstructions before stopping.
+
+These instructions aim to provide a clear, logical path with key items and transitions highlighted for easy navigation.
+
+Example: stanford_turn_around
+Response: I'm unable to interact directly with images, but I can still help you create the instructions based on a text description of the environment. If you describe the setting and the robot's path, I can generate a list of instructions for you.
+
+Example: sacson_hallway
+Response: I'm unable to process or analyze voices in the images, but I can guide you on how to approach this task based on the prompt. Here's how you might frame your instructions based on the environment seen in the images:
+
+---
+
+1. **Start Forward**: Begin by moving straight down the hallway towards the brightly lit area.
+2. **Pass Window on Left**: Continue walking forward with the glass windows on your left.
+3. **Approach Door on Right**: Move forward until reaching the door or opening on your right side.
+4. **Continue Straight**: Proceed straight, keeping the open area visible ahead.
+5. **Reach Corner**: Move to the end of the hallway, maintaining a straight path.
+6. **Maintain Course**: Continue walking forward, ignoring constant features unless objects impede.
+7. **Complete Path**: Reach the end point by continuing in a straight line to your destination.
+
+---
+
+This description, aligned with the principles of clarity, conciseness, and sequential logic, will help guide a robot through a hallway setting efficiently.
+
+Example: recon_sidewalk
+Response: Certainly! Here's a concise and clear list of robot navigation instructions based on the images provided:
+
+1. Move forward along the paved path.
+2. Continue straight, keeping the building on your right.
+3. Pass a pole on your left.
+4. Stay on the path until it curves slightly left.
+5. Maintain trajectory, passing grass on both sides.
+6. Continue forward toward the distant tree at the end of the path.
+
+These instructions focus on the main actions and relevant observations during the path.
+
+Example: stanford_wall
+Response: Observing the sequence of images, here is a concise and clear list of instructions describing the trajectory:
+
+1. Begin facing a large green wall.
+2. Move forward along the green wall.
+3. Continue straight, keeping the green wall to your left.
+4. Pass by glass doors on your right.
+5. Upon reaching the end of the corridor, prepare to turn around.
+6. Reverse direction, following the same path back.
+7. Keep the green wall to your right as you return.
+8. Pass the glass doors again, now on your left.
+9. Continue straight until you reach the starting point.
+
+This trajectory provides a complete description of movement in relation to the green wall and glass doors.
+
+Example: outdoor_jackal
+Response: To create a concise and clear list of instructions for a robot based on the provided images, here is a possible trajectory description:
+
+1. **Move Forward**: Begin by moving straight ahead through the grassy area.
+2. **Navigate Around Tree**: Upon approaching a tree on the left, veer slightly right to keep the tree to your side.
+3. **Continue Forward**: Proceed straight, maintaining a path parallel to the distant trees visible ahead.
+4. **Adjust Left**: Gradually adjust your course to the left as the grassy area opens up.
+5. **Pass Through Tall Grass**: Move through the patch of tall grass, ensuring clear visibility.
+6. **Reach Open Area**: Exit the tall grass into a more open space, continuing forward.
+7. **Final Adjustment**: Make a slight right to return to the original path, aligning with the tree line ahead.
+
+These instructions ensure clarity, consistency, and relevance for navigating the observed environment.
+
+Example: sacson_kitchen
+Response: Based on the images provided, here’s a list of concise instructions for navigation through the environment:
+
+1. **Start**: Move forward along the tiled hallway.
+2. **Pass**: Continue forward, passing the blue recycling bin on your left.
+3. **Navigate**: Slight right toward the open seating area.
+4. **Adjust**: Move forward toward the couch on the right.
+5. **Proceed**: Continue through the seating area, avoiding obstacles.
+6. **Turn**: Slight left to return to the main hallway.
+7. **Advance**: Move forward, passing a yellow-framed structure on your left.
+8. **Finish**: Head straight out of the seating area, ending in the open space.
+
+Ensure to keep movements smooth and maintain spatial awareness for any adjustments or obstacles.
+
+Example: sacson_corner
+Response: To provide a set of instructions, I'll create an example trajectory assuming the images show a typical hallway environment. Here's a concise and clear list of instructions for navigating through such an environment:
+
+1. Start at the hallway entrance.
+2. Move forward past the boxes on the left.
+3. Continue straight, keeping close to the right wall.
+4. Pass by the doorway on the left and move forward.
+5. When you see the exit sign, prepare to turn right.
+6. Turn right at the end of the hallway.
+7. Continue straight until you reach the room with the printer.
+8. Turn left to enter the room.
+9. Stop inside the room next to the printer.
+
+These instructions focus on key actions, are logically ordered, and should be easy to follow. Adjustments can be made to fit the specific layout if additional details are available.
+
+Example: stanford_door
+Response: To guide a robot through the observed environment, I'll provide a simplified trajectory based on the provided images, focusing on key actions and interactions:
+
+1. **Proceed Forward**: Move straight towards the door.
+2. **Approach Door**: Continue until directly in front of the door.
+3. **Align with Door**: Adjust position to ensure alignment with the center of the door.
+4. **Engage Door**: Move closer to make contact with the door handle.
+5. **Open Door**: Push the door gently to open it.
+6. **Enter Through Door**: Move forward into the next area while keeping the door open behind.
+7. **Clear Doorway**: Continue forward to ensure full passage through the door.
+
+Ensure each motion is completed before proceeding to the next step for a smooth traversal.
+
+Example: cory_hall
+Response: I'm unable to view the content of images. However, I can help you develop a set of instructions based on the context or details you provide. If you describe the environment and the robot's path, I can create a concise and clear list of instructions.
+
+Example: cory_door
+Response: I'm unable to view or interpret specific paths or trajectories from the images provided. However, I can help explain how you might approach generating a list of instructions for a robot navigating an environment. Here's a general guideline:
+
+1. **Start Point**: "Begin at the starting point in front of the door."
+
+2. **Move Forward**: "Move forward along the hallway."
+
+3. **Encounter Object**: "Upon encountering a doorway on the left, continue straight."
+
+4. **Continue Path**: "Proceed straight past the wooden panels on the right."
+
+5. **End Point**: "Stop at the end of the hallway near the second door on the left."
+
+6. **Consider Obstacles**: "Navigate around any obstacles in the pathway, if present."
+
+7. **Adjust Directions**: "If the path curves, adjust direction to stay aligned with the hallway."
+
+These instructions provide a basic framework based on typical hallway navigation. Adjust them based on the actual layout and features visible in your images.
+

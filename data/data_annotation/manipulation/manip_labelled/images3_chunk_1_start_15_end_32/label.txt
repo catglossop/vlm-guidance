@@ -1,0 +1,12 @@
+```json
+{
+  "instructions": [
+    "Identify objects in the workspace.",
+    "Pick up the green broccoli-like object.",
+    "Sort or categorize objects based on their shape and color.",
+    "Position robot arm above targeted object for picking.",
+    "Distinguish between objects such as sushi-like items and produce-like items."
+  ],
+  "reasoning": "The sequential images show the robot arm consistently positioned above a variety of objects, often focusing on the green broccoli-like object. This indicates the task involves identifying and potentially picking up or sorting objects. The presence of different shapes and colors suggests the robot is sorting or categorizing items based on these attributes. The arm's movements imply a pattern of recognition and manipulation without direct contact, supporting the notion of an evaluative task."
+}
+```

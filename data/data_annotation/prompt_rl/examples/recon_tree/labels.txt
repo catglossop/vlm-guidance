@@ -1,0 +1,3 @@
+Move towards the tree nearby
+Move along the building wall
+Move towards the white building

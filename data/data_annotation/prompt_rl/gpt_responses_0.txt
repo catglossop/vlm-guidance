@@ -1,0 +1,210 @@
+Example: recon_tree
+Response: 1. "Start facing a large tree and a white building. Move slightly forward."
+2. "Continue moving forward, passing the tree on the left. The building remains in sight."
+3. "Slowly rotate counterclockwise, keeping the tree centered."
+4. "Move slightly closer to the tree, adjusting orientation to maintain focus."
+5. "Rotate slightly to the left, observing a second building appear on the right."
+6. "Adjust position closer to the tree, re-centering it in the view."
+7. "Rotate slightly right, maintaining the tree and building in view."
+8. "Move slightly forward, keeping parallel to the buildings."
+9. "Shift left to align with the path between the buildings."
+10. "Continue forward past the tree, maintaining the buildings in view."
+11. "Proceed forward, re-aligning with first building. Tree remains centered."
+12. "Slight left rotation to adjust view, keeping tree focus."
+13. "Move slightly left while facing the tree and the two buildings."
+14. "Final position aligns with the initial view, centering on the tree and buildings."
+
+Example: sacson_window
+Response: 1. "Start moving straight along the corridor, keeping the glass wall on your left and wooden panels on your right."
+2. "Proceed forward, approach and pass the floor vent on your left."
+3. "Continue straight, observe a QR code to your left on the lower section of the glass wall."
+4. "Move forward, maintaining your course parallel to the glass windows."
+5. "Advance further ahead, noting a yellow marker on the carpet."
+6. "Keep moving straight, passing another QR code to your left."
+7. "Maintain trajectory along the path, with consistent spacing from both walls."
+8. "Proceed forward, entering the vicinity of an open area with ceiling lights visible."
+9. "Continue on the same path, observing a change in flooring texture up ahead."
+10. "Move towards the open area, with more space visible to your right."
+
+Example: cory_wall
+Response: 1. "Start facing a wall with a light fixture to the right, on a straight path."
+2. "Move forward, wooden panel appears to the right."
+3. "Continue straight, wooden panel remains to the right."
+4. "Move forward, wooden panel slightly closer on the right side."
+5. "Advance straight, wooden panel still on the right."
+6. "Maintain forward trajectory, wooden panel on the right."
+7. "Encounter wall directly in front, execute full rotation to reorient."
+8. "Return to original position, move straight ahead, wooden panel on the right."
+9. "Continue forward trajectory, wooden panel remains visible to the right."
+10. "Maintain course forward, panel on the right remains consistent."
+11. "Approach the wall again, execute reverse orientation by turning around 180 degrees."
+
+These instructions delineate the trajectory based on the observed objects and structure interactions.
+
+Example: stanford_railing
+Response: 1. Move forward along the corridor with a green wall on the left.
+2. Continue forward, observing bright sunlight from an opening ahead.
+3. Pass by a handrail on the right, leading to an open space or void below.
+4. Assess the surroundings: maintain the green wall to the left and a glass structure to the right.
+5. Proceed straight with occasional turns to adjust trajectory, aligning with the corridor pathway.
+6. Approach a more open area with increased light and potential pedestrian activity.
+7. Avoid obstacles and maintain a steady course toward the brighter end of the corridor.
+8. Monitor any potential exits or intersections on the path.
+9. Slow down as needed for turns or changes in the environment.
+10. Reach the end of the corridor or designated endpoint, concluding the forward motion.
+
+Example: sacson_lobby
+Response: 1. "Start facing a large glass window on the left and a green trash bin ahead."
+2. "Move forward, keeping the yellow structural beams on the right."
+3. "Observe a person walking past on the right side."
+4. "Continue straight, approaching a blue recycling bin on the right."
+5. "Pass by a series of white and yellow walls, along with overhead lighting fixtures."
+6. "Turn slightly to maintain the pathway between the glass windows on the left and interior structures on the right."
+7. "Notice a red ball near the door to the right as you proceed."
+8. "Continue forward, maintaining the glass window view on the left."
+9. "Spot a sequence of overhead circular lights."
+10. "Adjust path slightly to avoid a small floor drain."
+11. "Maintain straight trajectory, with glass windows still on the left."
+12. "Observe a white sliding door on the right and pass by more overhead lighting."
+13. "End trajectory near a familiar green trash bin and large windows, similar to the initial position."
+
+Example: stanford_turn_around
+Response: 1. "Start at the wooden cabinets; observe surroundings."
+2. "Move forward past the wooden cabinets; note green wall on the left."
+3. "Continue straight along the glass wall corridor; observe bright window ahead."
+4. "Pause and reverse slightly; retrace past cabinets."
+5. "Move forward again, staying close to the right wall and cabinets."
+6. "Turn slightly left; advance towards the glass partition."
+7. "Continue straight along the glass partition; align with bright window ahead."
+8. "Reverse; move back towards wooden cabinets."
+9. "Rotate and face wooden cabinets directly."
+10. "Move left past the cabinets; observe green wall on the left."
+11. "Advance towards bright window, following the glass wall on the right."
+12. "Pause and slightly reverse; return to initial position near the cabinets."
+
+This sequence of instructions retraces the path observed in the images, noting interactions and movements relative to encountered objects and structures.
+
+Example: sacson_hallway
+Response: ```python
+instructions = [
+    "Start: Move straight down the corridor with windows on the right.",
+    "Turn left into a narrower hallway with a yellow marker on the right wall.",
+    "Continue straight ahead with windows on the left.",
+    "Turn right, passing a yellow marker on the left wall.",
+    "Move forward with windows on the right.",
+    "Repeat moving down the corridor with windows alternating sides.",
+    "Return to original corridor facing the same starting direction.",
+    "Path resumes, ending back at the starting point."
+]
+
+instructions
+```
+
+Example: recon_sidewalk
+Response: 1. "Move forward along the sidewalk with buildings on both sides."
+2. "Turn left towards a grassy area with a yellow building."
+3. "Move forward alongside the grassy area, keeping the yellow building on your right."
+4. "Turn right back onto the sidewalk."
+5. "Proceed straight with the yellow building on your left."
+6. "Encounter a fork in the path, choose the path to the left."
+7. "Continue straight with a tree and buildings in the distance."
+8. "Approach the grassy area again, preparing to turn left."
+9. "Repeat the loop by moving forward and turning left towards the grassy area."
+10. "Continue the cycle of moving straight, turning, and encountering familiar landmarks."
+
+This trajectory describes a loop around a specific environment, interacting with the grassy area and yellow building multiple times.
+
+Example: stanford_wall
+Response: 1. "Move forward until reaching a green wall."
+2. "Turn slightly right to reveal a hallway with glass structures on the right."
+3. "Continue along the hallway, keeping the green wall on the left."
+4. "Observe the hallway narrowing slightly."
+5. "Reverse motion, maintaining a focus on the green wall ahead."
+6. "Retrace steps back along the hallway, keeping the green wall on the right."
+7. "Return to starting position facing the green wall."
+
+Repeat until navigation is completed as needed.
+
+Example: outdoor_jackal
+Response: 1. "Move forward towards the taller grass area, keeping the tree on the left in view."
+2. "Turn slightly left, maintaining a safe distance from the grass, and continue forward."
+3. "Approach the grassy area on the right, aligning with the tree in the distance."
+4. "Proceed straight, keeping the field and tree centered in front."
+5. "Navigate closer to the dense grass, ensuring it's to your left."
+6. "Advance forward, maintaining a path parallel to the taller plants."
+7. "Continue forward, keeping the tree in the background as a reference point."
+8. "Move closer to the grass while keeping the approaching tree in sight."
+9. "Maintain a steady path parallel to the grass as the tree becomes more prominent."
+10. "Move straight ahead, ensuring the grassy field remains in view."
+11. "Proceed straight with the tall grass and the tree consistently visible."
+12. "Continue on course, using the tree as a focal point as you move past the grass."
+13. "Maintain your approach forward, using the tree to the side as guidance."
+14. "Slowly move forward into the open area while keeping the landmarks on your side in sight."
+15. "Advance with the grass to the right and tree ahead, keeping a steady direction."
+16. "Keep moving straight, ensuring the tree and surrounding grass are continually visible."
+17. "Finish by approaching a position past the grassy region with the tree as the constant marker."
+
+Example: sacson_kitchen
+Response: 1. Start at the entrance, move forward toward the open area, passing a yellow-framed structure on the left.
+2. Continue straight, encountering a blue recycling bin on the left and a set of tables on the right.
+3. Move toward the tables, navigating through an open space with people seated and walking.
+4. Turn slightly right, then proceed straight, passing near a small information kiosk.
+5. Reverse direction, moving back past the recycling bin, then the yellow frame.
+6. Turn left, approach closer to the tables while maintaining a parallel path.
+7. Retrace steps, moving back to the original starting point near the yellow frame and blue bin.
+8. End at the initial position, facing the same direction as the start.
+
+Example: sacson_corner
+Response: 1. "Start at a location facing an open area with boxes on the left."
+2. "Move forward down a hallway with walls on both sides."
+3. "Enter a room with desks and equipment on the left."
+4. "Turn right into a corridor with open space ahead."
+5. "Continue straight, passing by people and other objects."
+6. "Proceed forward, alternating between areas with more open space and hallways."
+7. "Pause near a person, then continue navigating through the environment."
+8. "Navigate through a corridor, past structural columns."
+9. "Enter a bright area with light coming through windows on the left."
+10. "Proceed straight, observing alternating sections of rooms and hallways."
+11. "Turn around and move back through the sections previously navigated."
+12. "Return to the initial location with boxes on the right."
+
+Example: stanford_door
+Response: 1. "Approach closed wooden door in narrow hallway."
+2. "Move forward towards door with emergency sign above."
+3. "Continue straight, getting closer to the door with a push bar."
+4. "Approach the left side of the door, preparing to push."
+5. "Door opens slightly; position near open edge."
+6. "Pause and return to original position in front of closed door."
+7. "Repeat approach and retreat twice, maintaining position in hallway."
+
+This sequence describes a series of movements approaching and slightly interacting with a door and then reversing the trajectory.
+
+Example: cory_hall
+Response: - "Start facing down a long hallway."
+- "Proceed forward, observing doors on both sides. Pass the first set of doors on the left and right."
+- "Continue moving straight, noting wall-mounted objects on the right."
+- "Maintain direction, pass a second set of doors."
+- "Advance further, hallway lighting visible overhead."
+- "Keep moving forward, noting doors on both sides appear at regular intervals."
+- "Proceed straight, maintaining course through the hallway."
+- "Continue moving through an intersection with more doors along the path."
+- "Maintain forward trajectory, observing consistent wall and floor patterns."
+- "Reach the end of hallway, ready to stop or turn if necessary."
+
+Example: cory_door
+Response: Certainly! Here's a list of robot instructions based on the trajectory:
+
+1. "Move forward in the hallway, approaching the door on the left side."
+2. "Continue moving forward, keeping a large wooden wall structure on the right side."
+3. "Maintain direction while advancing; the wall stays on the right, and the lighting remains overhead."
+4. "Advance further; the door on the left is now further away and more to the rear."
+5. "Proceed with the wall consistently on the right and a door visible ahead."
+6. "Continue forward, closing the gap to the door on the left."
+7. "Move slightly closer to the wall on the right, reducing space on that side."
+8. "Keep going forward, still aligned with the right wall; decrease distance to left wall slightly."
+9. "Advance, walls on both sides, approaching the door directly ahead."
+10. "Approach closer towards the door; the right wall remains narrow."
+11. "Continue until close proximity to the door; preparing to stop or adjust direction."
+
+Ensure these actions maintain alignment with environmental objects and necessary adjustments.
+

@@ -32,10 +32,10 @@ for path in tqdm(lang_txt_paths):
         traj_data = pkl.load(old_file)
     if "text_features" in traj_data.keys():
         continue
-    lang_annotations = traj_data["language_annotations"]
+    lang_annotations = [traj_data["language_instruction"], traj_data["varied_language_instruction"]]
     if USE_CLIP:
         try:
-            prompts = clip.tokenize([lang["traj_description"] for lang in lang_annotations]).to(device)
+            prompts = clip.tokenize([lang for lang in lang_annotations]).to(device)
         except: 
             print(f"Error in path {path}")
             print(lang_annotations)
@@ -43,13 +43,13 @@ for path in tqdm(lang_txt_paths):
         text_features = model.encode_text(prompts).detach().cpu().numpy()
         new_path = path.replace("traj_data.pkl", "traj_data_w_embed_clip.pkl")
     if USE_UNI:
-        text_features = text_model([lang["traj_description"] for lang in lang_annotations]).numpy()
+        text_features = text_model([lang for lang in lang_annotations]).numpy()
         new_path = path.replace("traj_data.pkl", "traj_data_w_embed_google.pkl")
     if USE_T5:
         if len(lang_annotations) == 0:
             print(f"Path {path} has no lang annotations")
             continue
-        tokens = tokenizer([lang["traj_description"] for lang in lang_annotations], return_tensors="pt", padding=True)
+        tokens = tokenizer([lang for lang in lang_annotations], return_tensors="pt", padding=True)
         text_features = model(tokens["input_ids"]).last_hidden_state.mean(dim=1).detach().cpu().numpy()
         new_path = path.replace("traj_data.pkl", "traj_data_w_embed_t5.pkl")
     traj_data["text_features"] = text_features
