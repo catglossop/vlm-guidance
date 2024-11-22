@@ -89,7 +89,7 @@ def main(config):
     train_dataset_weights = [w / total_weight for w in weights]
     print(train_dataset_weights)
 
-    for dataset_name in config["datasets"]:
+    for dataset_idx, dataset_name in enumerate(config["datasets"]):
         data_config = config["datasets"][dataset_name]
         if "negative_mining" not in data_config:
             data_config["negative_mining"] = True
@@ -124,8 +124,13 @@ def main(config):
                         language_encoder=config["language_encoder"],
                     )
                     if data_split_type == "train":
-                        train_dataset.append(dataset)
-                        train_dataset_lengths.append(len(dataset))
+                        if len(dataset) == 0:
+                            print(f"Skipping dataset {dataset_name} for training")
+                            train_dataset_weights.pop(dataset_idx)
+                            continue
+                        else:
+                            train_dataset.append(dataset)
+                            train_dataset_lengths.append(len(dataset))
                     else:
                         dataset_type = f"{dataset_name}_{data_split_type}"
                         if dataset_type not in test_dataloaders:
@@ -150,6 +155,9 @@ def main(config):
         config["eval_batch_size"] = config["batch_size"]
 
     for dataset_type, dataset in test_dataloaders.items():
+        if len(dataset) == 0:
+            print(f"Skipping dataset {dataset_type} for evaluation")
+            continue
         test_dataloaders[dataset_type] = DataLoader(
             dataset,
             batch_size=config["eval_batch_size"],
@@ -204,7 +212,9 @@ def main(config):
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
                 mha_ff_dim_factor=config["mha_ff_dim_factor"],
-                late_fusion=config["late_fusion"]
+                late_fusion=config["late_fusion"],
+                per_obs_film=config["per_obs_film"],
+                use_film=config["use_film"],
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
     else:
@@ -496,6 +506,6 @@ if __name__ == "__main__":
         # update the wandb args with the training configurations
         if wandb.run:
             wandb.config.update(config)
-
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join([str(x) for x in config["all_gpu_ids"]])
     print(config)
     main(config)

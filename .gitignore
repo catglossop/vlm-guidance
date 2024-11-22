@@ -11,5 +11,7 @@ deployment/model_weights/
 *.jpg
 *.tar
 *.gif
+debug/examples/
+data/data_analysis/examples/
 data/data_annotation/lcbc_datasets/
 

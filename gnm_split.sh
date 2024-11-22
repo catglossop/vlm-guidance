@@ -1,0 +1,26 @@
+#!/bin/bash 
+
+for n in sacson go_stanford_cropped go_stanford2 cory_hall scand tartan_drive recon seattle;
+do
+   for i in left right forward stop;
+    do
+        if [ "$i" == "left" ];
+        then
+            python data_split.py -i /home/noam/LLLwL/datasets/atomic_dataset/$n/turn_$i/ -d "$n"_atomic_"$i"
+        fi
+        if [ "$i" == "right" ];
+        then
+            python data_split.py -i /home/noam/LLLwL/datasets/atomic_dataset/$n/turn_$i/ -d "$n"_atomic_"$i"
+        fi
+        if [ "$i" == "forward" ];
+        then
+            python data_split.py -i /home/noam/LLLwL/datasets/atomic_dataset/$n/go_$i/ -d "$n"_atomic_"$i"
+        fi
+        if [ "$i" == "stop" ];
+        then
+            python data_split.py -i /home/noam/LLLwL/datasets/atomic_dataset/$n/$i/ -d "$n"_atomic_"$i"
+        fi
+    done
+done
+
+

@@ -9,16 +9,22 @@ import numpy as np
 import yaml
 from typing import List, Tuple, Dict, Optional
 import glob 
-
+import tensorflow_hub as hub
+import tensorflow_text
+from transformers import T5EncoderModel, T5Tokenizer
 import torch
 from torchvision import transforms
 import torchvision.transforms.functional as TF
-
+import model
+import train
 from model.model import ResNetFiLMTransformer
 from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM, LNPMultiModal
 from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp, DenseNetwork, LNP_MM
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+import os
+path = os.path.abspath(train.__file__)
+print(path)
 from train.training.train_utils import replace_bn_with_gn, model_output_diffusion_eval
 from train.training.train_eval_loop import load_model
 from train.training.train_utils import model_output
@@ -67,6 +73,13 @@ def clip_embed(text, device):
     text_features = model.encode_text(text)
     return text_features
 
+def t5_embed(text, device):
+    tokenizer = T5Tokenizer.from_pretrained("google-t5/t5-small")
+    model = T5EncoderModel.from_pretrained("google-t5/t5-small")
+    tokens = tokenizer(text, return_tensors="pt", padding=True)
+    text_features = model(tokens["input_ids"]).last_hidden_state.mean(dim=1)
+    return text_features
+
 def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2, viz_context):
     dataset_name = "sacson"
     fig, ax = plt.subplots(1, 2)
@@ -98,7 +111,7 @@ def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2, viz_context):
     ax[0].legend([prompt_1, prompt_2], bbox_to_anchor=(1.2, 1.7))
     ax[1].legend([prompt_1, prompt_2])
     ax[0].set_ylim((-5, 5))
-    ax[0].set_xlim((-5, 15))
+    ax[0].set_xlim((-5, 5))
     prompt_1_joined = ("_").join(prompt_1.split())
     prompt_2_joined = ("_").join(prompt_2.split())
     plt.savefig(f"comparison_1_{prompt_1_joined}_2_{prompt_2_joined}.png")
@@ -204,6 +217,9 @@ def main(args):
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
                 mha_ff_dim_factor=config["mha_ff_dim_factor"],
+                late_fusion=config["late_fusion"],
+                per_obs_film=config["per_obs_film"],
+                use_film=config["use_film"],
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
         noise_scheduler = DDPMScheduler(
@@ -229,9 +245,13 @@ def main(args):
     load_model(model, config["model_type"], latest_checkpoint)
     model.to(args.device)
     model.eval()
-
-    prompt_embedding_1 = clip_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
-    prompt_embedding_2 = clip_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
+    if config["language_encoder"] == "clip":
+        prompt_embedding_1 = clip_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
+        prompt_embedding_2 = clip_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
+    elif config["language_encoder"] == "t5":
+        print("using t5")
+        prompt_embedding_1 = t5_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
+        prompt_embedding_2 = t5_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
     context_orig = []
     for i in range(args.start_idx, args.start_idx+config["context_size"]+1):
         try:

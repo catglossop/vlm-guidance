@@ -1074,7 +1074,8 @@ def evaluate_lnp_multimodal(
         "total_loss": Logger("total_loss", eval_type, window_size=print_log_freq),
     }
     num_batches = max(int(num_batches * eval_fraction), 1)
-
+    if num_batches > len(dataloader):
+        return
     with tqdm.tqdm(
         itertools.islice(dataloader, num_batches), 
         total=num_batches, 
@@ -1179,7 +1180,7 @@ def evaluate_lnp_multimodal(
 
                 if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
                     wandb.log(data_log, commit=True)
-
+    
     _log_data(
         i=i,
         epoch=epoch,

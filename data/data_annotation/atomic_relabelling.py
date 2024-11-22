@@ -163,7 +163,7 @@ def get_language_instructions(path):
         curr_traj_data = {key: val[i:i+curr_traj_len] for key, val in traj_data.items()}
         curr_traj_data["language_instruction"] = language_instruction
         curr_traj_data["varied_language_instruction"] = varied_language_instruction
-        curr_output_path = os.path.join(OUTPUT_PATH, f"{path.split('/')[-1]}_chunk_{chunk_idx}")
+        curr_output_path = os.path.join(OUTPUT_PATH, f"{('/').join(path.split('/')[-2:])}_chunk_{chunk_idx}")
         os.makedirs(curr_output_path, exist_ok=True)
         with open( curr_output_path + f"/traj_data.pkl", "wb") as f:
             pkl.dump(curr_traj_data, f)

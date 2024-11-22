@@ -14,8 +14,9 @@ USE_T5 = True
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled"
-input_path = "/home/noam/LLLwL/datasets/gnm_dataset_atomic_lang"
-lang_txt_paths = glob.glob(f"{input_path}/*/traj_data.pkl", recursive=True)
+input_path = "/home/noam/LLLwL/datasets/atomic_dataset"
+lang_txt_paths = glob.glob(f"{input_path}/*/*/*/traj_data.pkl", recursive=True)
+breakpoint()
 if USE_CLIP:
     model_version = "ViT-B/32"
     device = "cuda" if torch.cuda.is_available() else "cpu"
