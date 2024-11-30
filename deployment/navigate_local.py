@@ -76,8 +76,8 @@ class NavigateLocal(Node):
         self.language_encoder = self.model_params["language_encoder"]
 
         # self.clip_model, self.preprocess = clip.load(self.clip_model_type, device=self.device)
-        # self.clip_language_embedding =  clip.tokenize(self.language_prompt).to(self.device)
-        # self.clip_language_embedding = self.clip_model.encode_text(self.clip_language_embedding).to(torch.float)
+        # self.language_embedding =  clip.tokenize(self.language_prompt).to(self.device)
+        # self.language_embedding = self.clip_model.encode_text(self.language_embedding).to(torch.float)
         self.load_language_encoder(self.language_encoder)
         self.embed_language(self.language_prompt)
  
@@ -190,23 +190,26 @@ class NavigateLocal(Node):
         plt.savefig("visualize.png")
     def load_language_encoder(self, language_encoder):
         if language_encoder == "clip":
+            print("Loading CLIP model")
             self.clip_model, self.preprocess = clip.load("ViT-B/32", device=self.device)
         elif language_encoder == "google":
+            print("Loading Google model")
             self.google_model = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
         elif language_encoder == "t5":
+            print("Loading T5 model")
             self.tokenizer = T5Tokenizer.from_pretrained("google-t5/t5-small")
             self.t5_model = T5EncoderModel.from_pretrained("google-t5/t5-small")
         else:
             raise ValueError(f"Language encoder {language_encoder} not supported")
     def embed_language(self, language_prompt):
         if self.language_encoder == "clip":
-            self.clip_language_embedding = clip.tokenize(language_prompt).to(self.device)
-            self.clip_language_embedding = self.clip_model.encode_text(self.clip_language_embedding).to(torch.float)
+            self.language_embedding = clip.tokenize(language_prompt).to(self.device)
+            self.language_embedding = self.clip_model.encode_text(self.language_embedding).to(torch.float)
         elif self.language_encoder == "google":
-            self.clip_language_embedding = self.google_model(language_prompt)
+            self.language_embedding = self.google_model(language_prompt)
         elif self.language_encoder == "t5":
-            self.clip_language_embedding = self.tokenizer(language_prompt, return_tensors="pt", padding=True)
-            self.clip_language_embedding = self.t5_model(self.clip_language_embedding["input_ids"]).last_hidden_state.mean(dim=1).to(self.device)
+            self.language_embedding = self.tokenizer(language_prompt, return_tensors="pt", padding=True)
+            self.language_embedding = self.t5_model(self.language_embedding["input_ids"]).last_hidden_state.mean(dim=1).to(self.device)
         else:
             raise ValueError(f"Language encoder {self.language_encoder} not supported")
     def load_config(self, robot_config_path):
@@ -282,7 +285,7 @@ class NavigateLocal(Node):
     def infer_actions(self):
         if self.model_type == "rft":
             # Get early fusion obs goal for conditioning
-            self.nactions = self.model(self.obs_images.clone(), self.clip_language_embedding.clone())
+            self.nactions = self.model(self.obs_images.clone(), self.language_embedding.clone())
             self.nactions = np.array(self.get_action().detach().cpu().numpy())
             self.sampled_actions_msg = Float32MultiArray()
             self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.naction.flatten())).tolist()
@@ -298,7 +301,7 @@ class NavigateLocal(Node):
             self.nactions = model_output_diffusion_eval(self.model, 
                                                        self.noise_scheduler, 
                                                        self.obs_images.clone(), 
-                                                       self.clip_language_embedding.clone(), 
+                                                       self.language_embedding.clone(), 
                                                        goal_img,
                                                        self.model_params["len_traj_pred"], 
                                                        2, 

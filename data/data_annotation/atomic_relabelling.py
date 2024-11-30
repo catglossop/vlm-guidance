@@ -9,23 +9,23 @@ from tqdm import tqdm
 from PIL import Image
 
 
-MAX_STEPS = 20
+MAX_STEPS = 10
 DATASET_PATHS = "/home/noam/LLLwL/datasets/gnm_dataset"
 VISUALIZE = False
 DEBUG = False
-TURN_THRESHOLD = 1.0 # 45 degrees
+MIN_TURN_THRESHOLD = 1.05 # 60 degrees
+MIN_FORWARD_THRESHOLD = 0.8
 STOP_THRESHOLD = 0.5
-OUTPUT_PATH = "/home/noam/LLLwL/datasets/gnm_dataset_atomic_lang"
+USE_CENTERPOINT = True
+OUTPUT_PATH = "/home/noam/LLLwL/datasets/atomic_dataset_fixed"
 base_instructions = ["Turn left", "Turn right", "Go forward", "Stop"]
 varied_forward = [
     "Move forward",
-    "Proceed straight",
-    "Continue ahead",
+    "Go straight",
+    "Continue forward",
     "Keep going forward",
-    "Advance",
     "Go straight on",
     "Head straight",
-    "March forward",
     "Push forward",
     "Progress forward",
     "Forge ahead",
@@ -108,11 +108,13 @@ varied_stop = [
 ]
 
 def get_yaw_delta(yaw_1, yaw_2):
-    yaw_delta = yaw_2 - yaw_1
-    # print(f"Yaw delta: {yaw_delta}")
-    # breakpoint()
-    # yaw_delta_sign = -1 if yaw_delta >= np.pi else 1
-    # yaw_delta = yaw_delta + yaw_delta_sign*2*np.pi
+    # Get the two cases of yaw delta
+    yaw_delta_init = yaw_2 - yaw_1
+    if (yaw_delta_init > 0):
+        yaw_delta_wrap = yaw_delta_init - 2*np.pi
+    else:
+        yaw_delta_wrap = yaw_delta_init + 2*np.pi
+    yaw_delta = yaw_delta_init if np.abs(yaw_delta_init) < np.abs(yaw_delta_wrap) else yaw_delta_wrap
     return yaw_delta
 
 def get_language_instructions(path):
@@ -124,58 +126,83 @@ def get_language_instructions(path):
         return
     with open(path + "/traj_data.pkl", "rb") as f:
         traj_data = pkl.load(f) 
-    
-    yaw = traj_data["yaw"]
+    # yaw = traj_data["yaw"]
     pos = traj_data["position"]
-
+    pos_abs =  pos - pos[0]
+    if len(pos) <= 1:
+        return
+    yaw = [np.arctan2((pos_abs[i+1,1] - pos_abs[i,1]), (pos_abs[i+1,0] - pos_abs[i,0])) for i in range(len(pos_abs)-1)]
+    yaw = yaw + [yaw[-1]]
+    yaw = yaw - yaw[0]
+    dataset_name = path.split('/')[-2]
     while i < total_traj_len:
         # Get traj range
         curr_traj_len = 1
-        while i+curr_traj_len < total_traj_len and np.abs(get_yaw_delta(yaw[i], yaw[i+curr_traj_len])) < TURN_THRESHOLD and curr_traj_len < MAX_STEPS:
+        while i+curr_traj_len < total_traj_len and np.abs(get_yaw_delta(yaw[i], yaw[i+curr_traj_len])) < MIN_TURN_THRESHOLD and curr_traj_len < MAX_STEPS:
             curr_traj_len += 1
         if i+curr_traj_len >= total_traj_len:
             break
-        if get_yaw_delta(yaw[i], yaw[i+curr_traj_len]) > TURN_THRESHOLD:
+        if get_yaw_delta(yaw[i], yaw[i+curr_traj_len]) > MIN_TURN_THRESHOLD:
             if DEBUG:
                 print("Result is turn left")
                 print(f"Yaw delta: {get_yaw_delta(yaw[i], yaw[i+curr_traj_len])}")
+                print(f"Yaw: {yaw[i:i+curr_traj_len+1]}")
             language_instruction = base_instructions[0]
             varied_language_instruction = random.choice(varied_left)
-        elif get_yaw_delta(yaw[i], yaw[i+curr_traj_len]) < -TURN_THRESHOLD:
+        elif get_yaw_delta(yaw[i], yaw[i+curr_traj_len]) < -MIN_TURN_THRESHOLD:
             if DEBUG:
                 print("Result is turn right")
                 print(f"Yaw delta: {get_yaw_delta(yaw[i], yaw[i+curr_traj_len])}")
+                print(f"Yaw: {yaw[i:i+curr_traj_len+1]}")
             language_instruction = base_instructions[1]
             varied_language_instruction = random.choice(varied_right)
-        elif np.sqrt(np.sum(np.square(pos[i+curr_traj_len,:] - pos[i,:]), axis=-1)) > STOP_THRESHOLD:
+        elif np.sqrt(np.sum(np.square(pos[i+curr_traj_len,:] - pos[i,:]), axis=-1)) > STOP_THRESHOLD and np.abs(get_yaw_delta(yaw[i], yaw[i+curr_traj_len])) < MIN_FORWARD_THRESHOLD:
             if DEBUG:
                 print("Result is go forward")
                 print(f"Distance: {np.sqrt(np.sum(np.square(pos[i+curr_traj_len,:] - pos[i,:]), axis=-1))}")
+                print(f"Yaw: {yaw[i:i+curr_traj_len+1]}")
             language_instruction = base_instructions[2]
             varied_language_instruction = random.choice(varied_forward)
-        else:
+        elif np.sqrt(np.sum(np.square(pos[i+curr_traj_len,:] - pos[i,:]), axis=-1)) < STOP_THRESHOLD:
             if DEBUG:
                 print("Result is stop")
                 print(f"Distance: {np.sqrt(np.sum(np.square(pos[i+curr_traj_len,:] - pos[i,:]), axis=-1))}")
+                print(f"Yaw: {yaw[i:i+curr_traj_len+1]}")
             language_instruction = base_instructions[3]
             varied_language_instruction = random.choice(varied_stop)
-        
-        curr_traj_data = {key: val[i:i+curr_traj_len] for key, val in traj_data.items()}
+        else:
+            i += curr_traj_len
+            continue
+
+        curr_traj_data = {key: val[i:i+curr_traj_len+1] for key, val in traj_data.items()}
         curr_traj_data["language_instruction"] = language_instruction
         curr_traj_data["varied_language_instruction"] = varied_language_instruction
-        curr_output_path = os.path.join(OUTPUT_PATH, f"{path.split('/')[-1]}_chunk_{chunk_idx}")
-        os.makedirs(curr_output_path, exist_ok=True)
-        with open( curr_output_path + f"/traj_data.pkl", "wb") as f:
-            pkl.dump(curr_traj_data, f)
-        with open( curr_output_path + f"/{('_').join(language_instruction.lower().split(' '))}.txt", "w") as f:
-            f.write(language_instruction)
-        for j in range(i, i+curr_traj_len):
-            image = iio.imread(os.path.join(path, f"{j}.jpg"))
-            iio.imwrite(curr_output_path + f"/{j}.jpg", image)  
         if DEBUG:
-            images = [Image.open(os.path.join(curr_output_path, f"{j}.jpg")) for j in range(i, i+curr_traj_len)]
+            # Plot trajectory
+            print(f"Curr trajectory yaw: {curr_traj_data['yaw']}")
+            print(f"Curr traj yaw delta: {get_yaw_delta(curr_traj_data['yaw'][0], curr_traj_data['yaw'][-1])}")
+            plt.plot(curr_traj_data["position"][:,0], curr_traj_data["position"][:,1])
+            plt.scatter(curr_traj_data["position"][0,0], curr_traj_data["position"][0,1], c='r')
+            plt.scatter(curr_traj_data["position"][-1,0], curr_traj_data["position"][-1,1], c='g')
+            plt.xlabel("X")
+            plt.ylabel("Y")
+            plt.show()
+        
+        instruction_folder = ('_').join(language_instruction.lower().split(' '))
+        traj_name = f"{path.split('/')[-1]}_chunk_{chunk_idx}"
+        curr_output_path = os.path.join(OUTPUT_PATH, dataset_name, instruction_folder, traj_name)
+        os.makedirs(curr_output_path, exist_ok=True)
+        with open(curr_output_path + f"/traj_data.pkl", "wb") as f:
+            pkl.dump(curr_traj_data, f)
+        with open(curr_output_path + f"/{('_').join(language_instruction.lower().split(' '))}.txt", "w") as f:
+            f.write(language_instruction)
+        for j in range(i, i+curr_traj_len+1):
+            curr_ind = j - i
+            image = iio.imread(os.path.join(path, f"{j}.jpg"))
+            iio.imwrite(curr_output_path + f"/{curr_ind}.jpg", image)  
+        if DEBUG:
+            images = [Image.open(os.path.join(curr_output_path, f"{j-i}.jpg")) for j in range(i, i+curr_traj_len+1)]
             images[0].save("trajectory.gif", save_all=True, append_images=images[1:], duration=100, loop=1)
-            breakpoint()
         i += curr_traj_len
         chunk_idx += 1 
 

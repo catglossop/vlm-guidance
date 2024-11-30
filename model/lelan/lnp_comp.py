@@ -203,6 +203,8 @@ class LNPMultiModal(nn.Module):
         mha_num_attention_layers: Optional[int] = 2,
         mha_ff_dim_factor: Optional[int] = 4,
         late_fusion: bool = False,
+        per_obs_film: bool = False,
+        use_film: bool = False,
     ) -> None:
         """
         NoMaD ViNT Encoder class
@@ -214,10 +216,14 @@ class LNPMultiModal(nn.Module):
         self.context_size = context_size
         self.goal_mask_prob = goal_mask_prob
         self.late_fusion = late_fusion
+        self.per_obs_film = per_obs_film
+        self.use_film = use_film
 
         # Initialize FiLM Model
-        self.film_model = make_model(self.lang_encoding_size, 3, 8, 128, self.goal_encoding_size)
-        # self.film_model = make_model(self.lang_encoding_size, 3*(self.context_size +1), 8, 128, self.goal_encoding_size)
+        if self.per_obs_film:
+            self.film_model = make_model(self.lang_encoding_size, 3, 8, 128, self.goal_encoding_size)
+        else:
+            self.film_model = make_model(self.lang_encoding_size, 3*(self.context_size +1), 8, 128, self.goal_encoding_size)
 
         # Initialize the observation encoder
         if obs_encoder.split("-")[0] == "efficientnet":
@@ -279,7 +285,7 @@ class LNPMultiModal(nn.Module):
         obsgoal_img = torch.cat([obs_img, goal_img], dim=1) # concatenate the obs image/context and goal image --> non image goal?
         obsgoal_encoding = self.goal_encoder.extract_features(obsgoal_img) # get encoding of this img 
         obsgoal_encoding = self.goal_encoder._avg_pooling(obsgoal_encoding) # avg pooling 
-    
+
         if self.goal_encoder._global_params.include_top:
             obsgoal_encoding = obsgoal_encoding.flatten(start_dim=1)
             obsgoal_encoding = self.goal_encoder._dropout(obsgoal_encoding)
@@ -290,15 +296,17 @@ class LNPMultiModal(nn.Module):
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size
         
         inst_encoding = feat_text
-        # obslang_encoding = self.film_model(obs_img, inst_encoding).unsqueeze(1)
 
-        # Get obslang encoding
-        obslang_encodings = []
-        for img_idx in range(obs_img.shape[1]//3):
-            obs_i = obs_img[:, 3*img_idx:3*(img_idx+1),:]
-            obslang_encoding = self.film_model(obs_i, inst_encoding).unsqueeze(1)
-            obslang_encodings.append(obslang_encoding)
-        obslang_encoding = torch.cat(obslang_encodings, dim=1)
+        if self.per_obs_film:
+            # Get obslang encoding
+            obslang_encodings = []
+            for img_idx in range(obs_img.shape[1]//3):
+                obs_i = obs_img[:, 3*img_idx:3*(img_idx+1),:]
+                obslang_encoding = self.film_model(obs_i, inst_encoding).unsqueeze(1)
+                obslang_encodings.append(obslang_encoding)
+            obslang_encoding = torch.cat(obslang_encodings, dim=1)
+        else:
+            obslang_encoding = self.film_model(obs_img, inst_encoding).unsqueeze(1)
 
         # Get obs encoding
         obs_img = obs_img.reshape(-1, 3, obs_img.shape[-2], obs_img.shape[-1])
@@ -313,15 +321,19 @@ class LNPMultiModal(nn.Module):
         obs_encoding = torch.transpose(obs_encoding, 0, 1)
 
         # combine obs_encoding and obslang_encoding
-        obs_encodings = torch.cat([obs_encoding.unsqueeze(0), obslang_encoding.unsqueeze(0)], dim=0)
-        if input_goal_mask is not None:
-            obs_encoding_final = torch.zeros(obslang_encoding.shape).to(device)
-            obs_encoding_final[input_goal_mask == -1] = obs_encoding[input_goal_mask == -1]
-            obs_encoding_final[input_goal_mask != -1] = obslang_encoding[input_goal_mask != -1]
+        if self.use_film:
+            obsgoal_encoding = torch.cat((obs_encoding, obsgoal_encoding), dim=1)
         else:
-            obs_encoding_final = obslang_encoding
+            obsgoal_encoding = obslang_encoding
+        # if input_goal_mask is not None:
+        #     obs_encoding_final = torch.zeros(obslang_encoding.shape).to(device)
+        #     obs_encoding_final[input_goal_mask == -1] = obs_encoding[input_goal_mask == -1]
+        #     obs_encoding_final[input_goal_mask != -1] = obslang_encoding[input_goal_mask != -1]
+        # else:
+        #     obs_encoding_final = obslang_encoding
         # Create the goal_mask: 0 = no mask, 1 = mask
-        obsgoal_encoding = torch.cat((obs_encoding_final, obsgoal_encoding), dim=1)  
+        # obsgoal_encoding = obs_encoding_final
+        # obsgoal_encoding = torch.cat((obs_encoding_final, obsgoal_encoding), dim=1)  
         if len(obsgoal_encoding.shape) == 2:
             obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
         assert obsgoal_encoding.shape[2] == self.goal_encoding_size   
@@ -547,7 +559,6 @@ class FiLMBlock(nn.Module):
     def forward(self, x, gamma, beta):
         beta = beta.view(x.size(0), x.size(1), 1, 1)
         gamma = gamma.view(x.size(0), x.size(1), 1, 1)
-        
         x = gamma * x + beta
         
         return x

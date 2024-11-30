@@ -10,9 +10,10 @@ from copy import deepcopy
 import cv2
 import random
 
-DATA_PATH = ["/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled/", 
-             "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled/",
-             "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled/"]
+DATA_PATH = ["/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets_backup/cory_hall_labelled/", 
+             "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets_backup/go_stanford_cropped_labelled/",
+             "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets_backup/sacson_labelled/", 
+             "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets_backup/scand_labelled/",]
 TRAJ_CRITERIA_CHECK = "A trajectory is correct if it has:\n 1) Correct objects/structures,\n 2) Correct motion,\n 3) Correct grounding (locations of objects/structures),\n 4) Is descriptive (if there is something that is useful for navigation, it should be present in the instruction).\n Is the trajectory correct? (y/n) \n"
 TRAJ_CRITERIA_INCORRECT = "Please provide the reason why the trajectory is incorrect:\n 1 - Incorrect objects/structures,\n 2 - Incorrect motion,\n 3 - Incorrect grounding,\n 4 - Not descriptive,\n seperated by a comma (e.g. 1,2,3)"
 subresult = {"correct": 0, "incorrect": 0, "incorrect_reasons": {1: 0, 2: 0, 3: 0, 4: 0}}

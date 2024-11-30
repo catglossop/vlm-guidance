@@ -511,8 +511,6 @@ def train_lnp(
         
             B = obs_image.size(0)
             goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
-            print(torch.argwhere(torch.sum(lang_embedding, dim=1) == 0))
-            breakpoint()
             goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
             obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=lang_embedding, input_goal_mask=None)
 
@@ -524,7 +522,7 @@ def train_lnp(
                 obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
                 model_outputs = model("dist_pred_net", obsgoal_cond=obsgoal_cond)
                 
-                action_pred = model_outputs.reshape((obs_image.size(0),-1, 2))
+                action_pred = model_outputs.reshape((obs_image.size(0), -1, 2))
                 losses = _compute_losses(
                     action_label=batch_action_label,
                     action_pred=action_pred,
@@ -542,6 +540,7 @@ def train_lnp(
                     noise_scheduler,
                     batch_obs_images,
                     lang_embedding,
+                    lang,
                     batch_goal_images,
                     action_label.shape[1],
                     2,
@@ -743,6 +742,7 @@ def evaluate_lnp(
                     noise_scheduler,
                     batch_obs_images,
                     lang_embedding,
+                    lang,
                     batch_goal_images,
                     action_label.shape[1],
                     2,
@@ -840,6 +840,7 @@ def train_lnp_multimodal(
     image_log_freq: int = 1000,
     num_images_log: int = 8,
     use_wandb: bool = True,
+    categorical: bool = False,
 ):
     """
     Train the model for one epoch.
@@ -892,6 +893,7 @@ def train_lnp_multimodal(
                 dataset_index,
                 action_mask,
             ) = data
+
             obs_images = torch.split(obs_image, 3, dim=1)
             viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
             viz_goal_image = TF.resize(goal_image, VISUALIZATION_IMAGE_SIZE)
@@ -910,30 +912,46 @@ def train_lnp_multimodal(
             goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
             obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=None)
             
+            if categorical: 
+                obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
+                obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
+                obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
+                obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
+                obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
+                obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
             naction = from_numpy(ndeltas).to(device)
-
-            # Predict distance
-            dist_pred = model("dist_pred_net", obsgoal_cond=obsgoal_cond)
-            dist_loss = nn.functional.mse_loss(dist_pred.squeeze(-1), distance)
+            
+            if not categorical:
+                # Predict distance
+                dist_pred = model("dist_pred_net", obsgoal_cond=obsgoal_cond)
+                dist_loss = nn.functional.mse_loss(dist_pred.squeeze(-1), distance)
 
             # Predict actions
             eval_ema_model = ema_model.averaged_model
             eval_ema_model.eval()
-            model_outputs = model_output_diffusion(
-                eval_ema_model,
-                noise_scheduler,
-                batch_obs_images,
-                lang_embedding,
-                batch_goal_images,
-                action_label.shape[1],
-                2,
-                1,
-                obs_image.size(0),
-                device,
-            )
-            action_pred = model_outputs["actions"]
+            if model.action_head_type == "diffusion":
+                model_outputs = model_output_diffusion(
+                    eval_ema_model,
+                    noise_scheduler,
+                    batch_obs_images,
+                    lang_embedding,
+                    lang,
+                    batch_goal_images,
+                    action_label.shape[1],
+                    2,
+                    1,
+                    obs_image.size(0),
+                    device,
+                )
+                action_pred = model_outputs["actions"]
+            elif model.action_head_type == "dense":
+                model_outputs = model("action_head", global_cond=obsgoal_cond)
+                action_pred = model_outputs.reshape((obs_image.size(0),-1, 2))
+            else:
+                raise ValueError(f"Invalid action head type: {model.action_head_type}")
+            
             losses = _compute_losses(
                 action_label=batch_action_label,
                 action_pred=action_pred,
@@ -941,37 +959,48 @@ def train_lnp_multimodal(
                 learn_angle=False,
                 action_mask=action_mask,
             ) 
-            # Sample noise to add to actions
-            noise = torch.randn(naction.shape, device=device)
+            if model.action_head_type == "diffusion":
+                # Sample noise to add to actions
+                noise = torch.randn(naction.shape, device=device)
 
-            # Sample a diffusion iteration for each data point
-            timesteps = torch.randint(
-                0, noise_scheduler.config.num_train_timesteps,
-                (B,), device=device
-            ).long()
+                # Sample a diffusion iteration for each data point
+                timesteps = torch.randint(
+                    0, noise_scheduler.config.num_train_timesteps,
+                    (B,), device=device
+                ).long()
 
-            # Add noise to the clean images according to the noise magnitude at each diffusion iteration
-            noisy_action = noise_scheduler.add_noise(
-                naction, noise, timesteps)        
-                        
-            # Predict the noise residual
-            obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
-            noise_pred = model("noise_pred_net", sample=noisy_action, timestep=timesteps, global_cond=obsgoal_cond)
+                # Add noise to the clean images according to the noise magnitude at each diffusion iteration
+                noisy_action = noise_scheduler.add_noise(
+                    naction, noise, timesteps)        
+                            
+                # Predict the noise residual
+                noise_pred = model("action_head", sample=noisy_action, timestep=timesteps, global_cond=obsgoal_cond)
 
-            def action_reduce(unreduced_loss: torch.Tensor):
-                # Reduce over non-batch dimensions to get loss per batch element
-                while unreduced_loss.dim() > 1:
-                    unreduced_loss = unreduced_loss.mean(dim=-1)
-                assert unreduced_loss.shape == action_mask.shape, f"{unreduced_loss.shape} != {action_mask.shape}"
-                return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
+                def action_reduce(unreduced_loss: torch.Tensor):
+                    # Reduce over non-batch dimensions to get loss per batch element
+                    while unreduced_loss.dim() > 1:
+                        unreduced_loss = unreduced_loss.mean(dim=-1)
+                    assert unreduced_loss.shape == action_mask.shape, f"{unreduced_loss.shape} != {action_mask.shape}"
+                    return (unreduced_loss * action_mask).mean() / (action_mask.mean() + 1e-2)
 
-            # L2 loss
-            diffusion_loss = action_reduce(F.mse_loss(noise_pred, noise, reduction="none"))
+                # L2 loss
+                diffusion_loss = action_reduce(F.mse_loss(noise_pred, noise, reduction="none"))
 
-            loss = alpha * dist_loss + (1-alpha) * diffusion_loss
-
-            losses["dist_loss"] = dist_loss
-            losses["diffusion_loss"] = diffusion_loss
+            # Combine losses
+            if model.action_head_type == "diffusion":
+                if not categorical:
+                    loss = alpha * dist_loss + (1-alpha) * diffusion_loss
+                    losses["dist_loss"] = dist_loss
+                    losses["diffusion_loss"] = diffusion_loss
+                else:
+                    loss = diffusion_loss
+                    losses["diffusion_loss"] = diffusion_loss
+            elif model.action_head_type == "dense":
+                if not categorical:
+                    loss = alpha * dist_loss + (1-alpha) * losses["action_loss"]
+                    losses["dist_loss"] = dist_loss
+                else:
+                    loss = losses["action_loss"]
 
             # Optimize
             optimizer.zero_grad()
@@ -1014,6 +1043,7 @@ def train_lnp_multimodal(
     
 def evaluate_lnp_multimodal(
     eval_type: str,
+    model: nn.Module,
     ema_model: EMAModel,
     dataloader: DataLoader,
     transform: transforms,
@@ -1029,6 +1059,8 @@ def evaluate_lnp_multimodal(
     eval_fraction: float = 0.25,
     use_wandb: bool = True,
     linear_output=False,
+    categorical: bool = False,
+    alpha: float = 1e-4,
 ):
     """
     Evaluate the model on the given evaluation dataset.
@@ -1050,8 +1082,9 @@ def evaluate_lnp_multimodal(
         eval_fraction (float): fraction of data to use for evaluation
         use_wandb (bool): whether to use wandb for logging
     """
-    ema_model = ema_model.averaged_model
-    ema_model.eval()
+    # ema_model = ema_model.averaged_model
+    # ema_model.eval()
+    model.eval()
     num_batches = len(dataloader)
 
     action_loss_logger = Logger("action_loss", eval_type, window_size=print_log_freq)
@@ -1064,7 +1097,6 @@ def evaluate_lnp_multimodal(
     dist_loss_logger = Logger("dist_loss", eval_type, window_size=print_log_freq)
     diffusion_loss_logger = Logger("diffusion_loss", eval_type, window_size=print_log_freq)
     total_loss_logger = Logger("total_loss", eval_type, window_size=print_log_freq)
-
     loggers = {
         "action_loss": action_loss_logger,
         "action_waypts_cos_sim": action_waypts_cos_sim_logger,
@@ -1074,7 +1106,8 @@ def evaluate_lnp_multimodal(
         "total_loss": Logger("total_loss", eval_type, window_size=print_log_freq),
     }
     num_batches = max(int(num_batches * eval_fraction), 1)
-
+    if num_batches > len(dataloader):
+        return
     with tqdm.tqdm(
         itertools.islice(dataloader, num_batches), 
         total=num_batches, 
@@ -1110,61 +1143,89 @@ def evaluate_lnp_multimodal(
             B = obs_image.size(0)
             goal_mask = (torch.rand((B,)) < goal_mask_prob).long().to(device)
             goal_mask[torch.argwhere(torch.sum(lang_embedding, dim=1) == 0)] = -1
-            obsgoal_cond = ema_model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=None)
+            # CHANGED
+            with torch.no_grad():
+                obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=lang_embedding, input_goal_mask=None)
 
-            deltas = get_delta(action_label)
-            ndeltas = normalize_data(deltas, ACTION_STATS)
-            naction = from_numpy(ndeltas).to(device)
-            assert naction.shape[-1] == 2, "action dim must be 2"
+                if categorical: 
+                    obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
+                    obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
+                    obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
+                    obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
+                    obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
+                    obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
 
-            dist_pred = ema_model("dist_pred_net", obsgoal_cond=obsgoal_cond)
-            dist_loss = nn.functional.mse_loss(dist_pred.squeeze(-1), distance)
+                deltas = get_delta(action_label)
+                ndeltas = normalize_data(deltas, ACTION_STATS)
+                naction = from_numpy(ndeltas).to(device)
+                assert naction.shape[-1] == 2, "action dim must be 2"
+                if not categorical:
+                    # Predict distance
+                    # CHANGED
+                    dist_pred = model("dist_pred_net", obsgoal_cond=obsgoal_cond)
+                    dist_loss = nn.functional.mse_loss(dist_pred.squeeze(-1), distance)
 
-            model_outputs = model_output_diffusion(
-                ema_model,
-                noise_scheduler,
-                batch_obs_images,
-                lang_embedding,
-                batch_goal_images,
-                action_label.shape[1],
-                2,
-                1,
-                B,
-                device,
-            )
-            action_pred = model_outputs["actions"]
+                if model.action_head_type == "diffusion":
+                    # CHANGED
+                    model_outputs = model_output_diffusion(
+                        model,
+                        noise_scheduler,
+                        batch_obs_images,
+                        lang_embedding,
+                        lang,
+                        batch_goal_images,
+                        action_label.shape[1],
+                        2,
+                        1,
+                        B,
+                        device,
+                    )
+                    action_pred = model_outputs["actions"]
+                elif model.action_head_type == "dense":
+                    #CHANGED
+                    model_outputs = model("action_head", global_cond=obsgoal_cond)
+                    action_pred = model_outputs.reshape((obs_image.size(0),-1, 2))
+                if model.action_head_type == "diffusion":
+                    # Sample noise to add to actions
+                    noise = torch.randn(naction.shape, device=device)
 
-            # Sample noise to add to actions
-            noise = torch.randn(naction.shape, device=device)
+                    # Sample a diffusion iteration for each data point
+                    timesteps = torch.randint(
+                        0, noise_scheduler.config.num_train_timesteps,
+                        (B,), device=device
+                    ).long()
 
-            # Sample a diffusion iteration for each data point
-            timesteps = torch.randint(
-                0, noise_scheduler.config.num_train_timesteps,
-                (B,), device=device
-            ).long()
+                    noisy_actions = noise_scheduler.add_noise(
+                        naction, noise, timesteps)
+                    # CHANGED
+                    noise_pred = model("action_head", sample=noisy_actions, timestep=timesteps, global_cond=obsgoal_cond)
+                    diffusion_loss = nn.functional.mse_loss(noise_pred, noise)
 
-            noisy_actions = noise_scheduler.add_noise(
-                naction, noise, timesteps)
-        
-            # Predict the noise residual
-            obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
-            noise_pred = ema_model("noise_pred_net", sample=noisy_actions, timestep=timesteps, global_cond=obsgoal_cond)
+                losses = _compute_losses(
+                    action_label=batch_action_label,
+                    action_pred=action_pred,
+                    alpha=alpha,
+                    learn_angle=False,
+                    action_mask=action_mask,
+                )
+                
+                # Combine losses
+                if model.action_head_type == "diffusion":
+                    if not categorical:
+                        loss = alpha * dist_loss + (1-alpha) * diffusion_loss
+                        losses["dist_loss"] = dist_loss
+                        losses["diffusion_loss"] = diffusion_loss
+                    else:
+                        loss = diffusion_loss
+                        losses["diffusion_loss"] = diffusion_loss
+                elif model.action_head_type == "dense":
+                    if not categorical:
+                        losses["dist_loss"] = dist_loss
+                        loss = alpha * dist_loss + (1-alpha) * losses["action_loss"]
+                    else:
+                        loss = losses["action_loss"]
 
-            diffusion_loss = nn.functional.mse_loss(noise_pred, noise)
-            alpha = 1e-4
-            loss = alpha * dist_loss + (1-alpha) * diffusion_loss
-
-            losses = _compute_losses(
-                action_label=batch_action_label,
-                action_pred=action_pred,
-                alpha=alpha,
-                learn_angle=False,
-                action_mask=action_mask,
-            )
-
-            losses["total_loss"] = loss
-            losses["dist_loss"] = dist_loss
-            losses["diffusion_loss"] = diffusion_loss
+                losses["total_loss"] = loss
                 
             for key, value in losses.items():
                 if key in loggers:
@@ -1179,7 +1240,7 @@ def evaluate_lnp_multimodal(
 
                 if use_wandb and i % wandb_log_freq == 0 and wandb_log_freq != 0:
                     wandb.log(data_log, commit=True)
-
+    
     _log_data(
         i=i,
         epoch=epoch,
@@ -1258,6 +1319,7 @@ def model_output_diffusion(
     noise_scheduler: DDPMScheduler,
     batch_obs_images: torch.Tensor,
     batch_lang_embeddings: torch.Tensor,
+    batch_lang: torch.Tensor,
     batch_goal_images: torch.Tensor,
     pred_horizon: int,
     action_dim: int,
@@ -1265,43 +1327,58 @@ def model_output_diffusion(
     batch_size: int,
     device: torch.device,
     goal_mask=None,
+    categorical: bool = False,
 ):
     
     obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=None)
     obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
+
+    if categorical:
+        obsgoal_cond = obsgoal_cond.reshape((batch_size,-1))
+        obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
+        obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
+        obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
+        obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
+        obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
-
-    # initialize action from Gaussian noise
-    noisy_diffusion_output = torch.randn(
-        (batch_size, pred_horizon, action_dim), device=device)
-    diffusion_output = noisy_diffusion_output
-    for k in noise_scheduler.timesteps[:]:
-        # predict noise
-        noise_pred = model(
-            "noise_pred_net",
-            sample=diffusion_output,
-            timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
-            global_cond=obsgoal_cond
-        )
-        # inverse diffusion step (remove noise)
-        diffusion_output = noise_scheduler.step(
-            model_output=noise_pred,
-            timestep=k,
-            sample=diffusion_output
-        ).prev_sample
-    obsgoal_cond = obsgoal_cond.flatten(start_dim=1)
-    actions_diffusion = get_action(diffusion_output, ACTION_STATS)
-
-    return {
-        'actions': actions_diffusion,
-    }
-
+    if model.action_head_type == "diffusion":
+        # initialize action from Gaussian noise
+        noisy_diffusion_output = torch.randn(
+            (batch_size, pred_horizon, action_dim), device=device)
+        diffusion_output = noisy_diffusion_output
+        for k in noise_scheduler.timesteps[:]:
+            # predict noise
+            noise_pred = model(
+                "action_head",
+                sample=diffusion_output,
+                timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
+                global_cond=obsgoal_cond
+            )
+            # inverse diffusion step (remove noise)
+            diffusion_output = noise_scheduler.step(
+                model_output=noise_pred,
+                timestep=k,
+                sample=diffusion_output
+            ).prev_sample
+        obsgoal_cond = obsgoal_cond.flatten(start_dim=1)
+        actions_diffusion = get_action(diffusion_output, ACTION_STATS)
+        return {
+            'actions': actions_diffusion,
+        }
+    elif model.action_head_type == "dense":
+        actions_dense = model("action_head", global_cond=obsgoal_cond)
+        actions_dense = actions_diffusion.reshape((batch_size,-1,2))
+        return {
+            'actions': actions_dense,
+        }
 
 def model_output_diffusion_eval(
     model: nn.Module,
     noise_scheduler: DDPMScheduler,
     batch_obs_images: torch.Tensor,
     batch_lang_embeddings: torch.Tensor,
+    batch_lang: torch.Tensor,
     batch_goal_images: torch.Tensor,
     pred_horizon: int,
     action_dim: int,
@@ -1309,44 +1386,53 @@ def model_output_diffusion_eval(
     batch_size: int,
     device: torch.device,
     mask_image: bool = False,
+    categorical: bool = False,
 ):
     if mask_image:
         input_goal_mask = torch.ones(batch_size, device=device)
 
-    if batch_goal_images is not None:
-        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=None)
-        obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
-        obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
-    else:
-        obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_lang=batch_lang_embeddings, input_goal_mask=None)
-        obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
-        obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
+    obsgoal_cond = model("vision_encoder", obs_img=batch_obs_images, goal_img=batch_goal_images, goal_lang=batch_lang_embeddings, input_goal_mask=None)
+    obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
+    if categorical:
+        obsgoal_cond = obsgoal_cond.reshape((batch_size,-1))
+        obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
+        obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
+        obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
+        obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
+        obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+    obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
 
-    # initialize action from Gaussian noise
-    noisy_diffusion_output = torch.randn(
-        (num_samples, pred_horizon, action_dim), device=device)
-    diffusion_output = noisy_diffusion_output
+    if model.action_head_type == "diffusion":
+        # initialize action from Gaussian noise
+        noisy_diffusion_output = torch.randn(
+            (num_samples, pred_horizon, action_dim), device=device)
+        diffusion_output = noisy_diffusion_output
 
-    for k in noise_scheduler.timesteps[:]:
-        # predict noise
-        noise_pred = model(
-            "noise_pred_net",
-            sample=diffusion_output,
-            timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
-            global_cond=obsgoal_cond
-        )
-        # inverse diffusion step (remove noise)
-        diffusion_output = noise_scheduler.step(
-            model_output=noise_pred,
-            timestep=k,
-            sample=diffusion_output
-        ).prev_sample
-    obsgoal_cond = obsgoal_cond.flatten(start_dim=1)
-    actions_diffusion = get_action(diffusion_output, ACTION_STATS)
-
-    return {
-        'actions': actions_diffusion,
-    }
+        for k in noise_scheduler.timesteps[:]:
+            # predict noise
+            noise_pred = model(
+                "action_head",
+                sample=diffusion_output,
+                timestep=k.unsqueeze(-1).repeat(diffusion_output.shape[0]).to(device),
+                global_cond=obsgoal_cond
+            )
+            # inverse diffusion step (remove noise)
+            diffusion_output = noise_scheduler.step(
+                model_output=noise_pred,
+                timestep=k,
+                sample=diffusion_output
+            ).prev_sample
+        obsgoal_cond = obsgoal_cond.flatten(start_dim=1)
+        actions_diffusion = get_action(diffusion_output, ACTION_STATS)
+        return {
+            'actions': actions_diffusion,
+        }
+    elif model.action_head_type == "dense":
+        actions_dense = model("action_head", global_cond=obsgoal_cond)
+        actions_dense = actions_dense.reshape((num_samples,-1,2))
+        return {
+            'actions': actions_dense,
+        }
 
 # Utils for Group Norm
 def replace_bn_with_gn(
