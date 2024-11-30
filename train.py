@@ -235,19 +235,36 @@ def main(config):
             )
         dist_pred_network = DenseNetwork_lnp(embedding_dim=config["encoding_size"]*(config["context_size"]+1), control_horizon=config["len_traj_pred"])
     if config["model_type"] == "lnp_multi_modal":
-        noise_scheduler = DDPMScheduler(
-                num_train_timesteps=config["num_diffusion_iters"],
-                beta_schedule='squaredcos_cap_v2',
-                clip_sample=True,
-                prediction_type='epsilon'
-            )
-        noise_pred_net = ConditionalUnet1D(
-                input_dim=2,
-                global_cond_dim=config["encoding_size"],
-                down_dims=config["down_dims"],
-                cond_predict_scale=config["cond_predict_scale"],
-            )
-        dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        if config["action_head"] == "diffusion":
+            noise_scheduler = DDPMScheduler(
+                    num_train_timesteps=config["num_diffusion_iters"],
+                    beta_schedule='squaredcos_cap_v2',
+                    clip_sample=True,
+                    prediction_type='epsilon'
+                )
+            if config["categorical"]:
+                action_head = ConditionalUnet1D(
+                    input_dim=2,
+                    global_cond_dim=4,
+                    down_dims=config["down_dims"],
+                    cond_predict_scale=config["cond_predict_scale"],
+                )
+            else:
+                action_head = ConditionalUnet1D(
+                        input_dim=2,
+                        global_cond_dim=config["encoding_size"],
+                        down_dims=config["down_dims"],
+                        cond_predict_scale=config["cond_predict_scale"],
+                    )
+            dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        elif config["action_head"] == "dense":
+            noise_scheduler = None
+            if config["categorical"]:
+                action_head = DenseNetwork_lnp(embedding_dim=4, control_horizon=config["len_traj_pred"])
+                dist_pred_network = None
+            else:
+                action_head = DenseNetwork_lnp(embedding_dim=config["encoding_size"], control_horizon=config["len_traj_pred"])
+                dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
 
     if config["vision_encoder"] == "lnp":   
         model = LNP(
@@ -271,8 +288,9 @@ def main(config):
     elif config["vision_encoder"] == "lnp_multi_modal":
         model = LNP_MM(
             vision_encoder=vision_encoder,
-            noise_pred_net=noise_pred_net,
+            action_head=action_head,
             dist_pred_net=dist_pred_network,
+            action_head_type=config["action_head"],
         )  
 
     if config["clipping"]:
@@ -453,6 +471,7 @@ def main(config):
             eval_fraction=config["eval_fraction"],
             eval_freq=config["eval_freq"],
             save_freq=config["save_freq"],
+            categorical=config["categorical"],
         ) 
     else:
         raise ValueError(f"Model {config['model']} not supported")
@@ -499,7 +518,7 @@ if __name__ == "__main__":
         wandb.init(
             project=config["project_name"],
             settings=wandb.Settings(start_method="fork"),
-            entity="gnmv2", # TODO: change this to your wandb entity
+            entity="catglossop", # TODO: change this to your wandb entity
         )
         wandb.save(args.config, policy="now")  # save the config file
         wandb.run.name = config["run_name"]

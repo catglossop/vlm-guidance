@@ -77,7 +77,7 @@ def t5_embed(text, device):
     tokenizer = T5Tokenizer.from_pretrained("google-t5/t5-small")
     model = T5EncoderModel.from_pretrained("google-t5/t5-small")
     tokens = tokenizer(text, return_tensors="pt", padding=True)
-    text_features = model(tokens["input_ids"]).last_hidden_state.mean(dim=1)
+    text_features = model(tokens["input_ids"], attention_mask=tokens["attention_mask"]).last_hidden_state.mean(dim=1)
     return text_features
 
 def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2, viz_context):
@@ -108,10 +108,10 @@ def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2, viz_context):
             traj_colors=[CYAN, MAGENTA],
             point_colors=[GREEN, RED],
         )
-    ax[0].legend([prompt_1, prompt_2], bbox_to_anchor=(1.2, 1.7))
+    ax[0].legend([prompt_1, prompt_2])
     ax[1].legend([prompt_1, prompt_2])
-    ax[0].set_ylim((-5, 5))
-    ax[0].set_xlim((-5, 5))
+    ax[0].set_ylim((-5, 10))
+    ax[0].set_xlim((-5, 10))
     prompt_1_joined = ("_").join(prompt_1.split())
     prompt_2_joined = ("_").join(prompt_2.split())
     plt.savefig(f"comparison_1_{prompt_1_joined}_2_{prompt_2_joined}.png")
@@ -129,11 +129,11 @@ def load_config(config_path):
     return config
 
 
-def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding, pred_horizon, action_dim, num_samples, batch_size, linear_output, device, mask_image=False):
+def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding, prompt, pred_horizon, action_dim, num_samples, batch_size, linear_output, device, mask_image=False):
     if linear_output:
         return model(context.clone(), prompt_embedding).detach().cpu().numpy()
     else:
-        return model_output_diffusion_eval(model, noise_scheduler, context.clone(), prompt_embedding, goal_img, pred_horizon, action_dim, num_samples, batch_size, device, mask_image)["actions"].detach().cpu().numpy()
+        return model_output_diffusion_eval(model, noise_scheduler, context.clone(), prompt_embedding, prompt, goal_img, pred_horizon, action_dim, num_samples, batch_size, device, mask_image)["actions"].detach().cpu().numpy()
         
 def main(args): 
     config = load_config(args.config)
@@ -237,10 +237,12 @@ def main(args):
         dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
         model = LNP_MM(
             vision_encoder=vision_encoder,
-            noise_pred_net=noise_pred_net,
+            action_head=noise_pred_net,
             dist_pred_net=dist_pred_network,
+            action_head_type="diffusion",
         )  
     checkpoint_path = os.path.join(args.model_path, f"{args.checkpoint}.pth")
+
     latest_checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage.cuda(1)) #f"cuda:{}" if torch.cuda.is_available() else "cpu")
     load_model(model, config["model_type"], latest_checkpoint)
     model.to(args.device)
@@ -252,6 +254,7 @@ def main(args):
         print("using t5")
         prompt_embedding_1 = t5_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
         prompt_embedding_2 = t5_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
+
     context_orig = []
     for i in range(args.start_idx, args.start_idx+config["context_size"]+1):
         try:
@@ -273,8 +276,8 @@ def main(args):
             elif config["model_type"] == "lnp_multi_modal":
                 mask_image = True
                 goal_img = torch.zeros((1, 3, 96, 96)).to(args.device)
-                output_1 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
-                output_2 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
+                output_1 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_1, args.prompt_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
+                output_2 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_2, args.prompt_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
         
             compare_output(output_1, output_2, viz_img, args.prompt_1, args.prompt_2, viz_context)
         check = input("Retry? (y/n)")

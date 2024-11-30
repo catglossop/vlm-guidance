@@ -559,7 +559,6 @@ class FiLMBlock(nn.Module):
     def forward(self, x, gamma, beta):
         beta = beta.view(x.size(0), x.size(1), 1, 1)
         gamma = gamma.view(x.size(0), x.size(1), 1, 1)
-        
         x = gamma * x + beta
         
         return x
