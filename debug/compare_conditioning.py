@@ -9,16 +9,22 @@ import numpy as np
 import yaml
 from typing import List, Tuple, Dict, Optional
 import glob 
-
+import tensorflow_hub as hub
+import tensorflow_text
+from transformers import T5EncoderModel, T5Tokenizer
 import torch
 from torchvision import transforms
 import torchvision.transforms.functional as TF
-
+import model
+import train
 from model.model import ResNetFiLMTransformer
 from model.lelan.lnp_comp import LNP_comp, LNP_clip_FiLM, LNPMultiModal
 from model.lelan.lnp import LNP_clip, LNP, DenseNetwork_lnp, DenseNetwork, LNP_MM
 from diffusion_policy.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
+import os
+path = os.path.abspath(train.__file__)
+print(path)
 from train.training.train_utils import replace_bn_with_gn, model_output_diffusion_eval
 from train.training.train_eval_loop import load_model
 from train.training.train_utils import model_output
@@ -67,6 +73,13 @@ def clip_embed(text, device):
     text_features = model.encode_text(text)
     return text_features
 
+def t5_embed(text, device):
+    tokenizer = T5Tokenizer.from_pretrained("google-t5/t5-small")
+    model = T5EncoderModel.from_pretrained("google-t5/t5-small")
+    tokens = tokenizer(text, return_tensors="pt", padding=True)
+    text_features = model(tokens["input_ids"], attention_mask=tokens["attention_mask"]).last_hidden_state.mean(dim=1)
+    return text_features
+
 def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2, viz_context):
     dataset_name = "sacson"
     fig, ax = plt.subplots(1, 2)
@@ -95,10 +108,10 @@ def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2, viz_context):
             traj_colors=[CYAN, MAGENTA],
             point_colors=[GREEN, RED],
         )
-    ax[0].legend([prompt_1, prompt_2], bbox_to_anchor=(1.2, 1.7))
+    ax[0].legend([prompt_1, prompt_2])
     ax[1].legend([prompt_1, prompt_2])
-    ax[0].set_ylim((-5, 5))
-    ax[0].set_xlim((-5, 15))
+    ax[0].set_ylim((-5, 10))
+    ax[0].set_xlim((-5, 10))
     prompt_1_joined = ("_").join(prompt_1.split())
     prompt_2_joined = ("_").join(prompt_2.split())
     plt.savefig(f"comparison_1_{prompt_1_joined}_2_{prompt_2_joined}.png")
@@ -116,12 +129,37 @@ def load_config(config_path):
     return config
 
 
-def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding, pred_horizon, action_dim, num_samples, batch_size, linear_output, device, mask_image=False):
-    if linear_output:
-        return model(context.clone(), prompt_embedding).detach().cpu().numpy()
-    else:
-        print(context.shape)
-        return model_output_diffusion_eval(model, noise_scheduler, context.clone(), prompt_embedding, goal_img, pred_horizon, action_dim, num_samples, batch_size, device, mask_image)["actions"].detach().cpu().numpy()
+def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding, prompt, pred_horizon, action_dim, num_samples, batch_size, linear_output, device, mask_image=False):
+    # if model.action_head_type == "dense":
+    #     if model.action_head.embedding_dim == 4:
+    #         if prompt == "Turn left":
+    #             prompt_embedding = torch.tensor([1, 0, 0, 0]).to(device).unsqueeze(0)
+    #         elif prompt == "Turn right":
+    #             prompt_embedding = torch.tensor([0, 1, 0, 0]).to(device).unsqueeze(0)
+    #         elif prompt == "Go forward":
+    #             prompt_embedding = torch.tensor([0, 0, 1, 0]).to(device).unsqueeze(0)
+    #         elif prompt == "Stop":
+    #             prompt_embedding = torch.tensor([0, 0, 0, 1]).to(device).unsqueeze(0)
+    try:
+        categorical = model.action_head.embedding_dim == 4
+    except:
+        categorical = False
+    output = model_output_diffusion_eval(
+        model,
+        noise_scheduler,
+        context.clone(),
+        prompt_embedding.float(),
+        [prompt],
+        goal_img,
+        pred_horizon,
+        action_dim,
+        num_samples,
+        batch_size,
+        device,
+        mask_image,
+        categorical,
+    )
+    return output["actions"].detach().cpu().numpy()
         
 def main(args): 
     config = load_config(args.config)
@@ -205,6 +243,9 @@ def main(args):
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
                 mha_ff_dim_factor=config["mha_ff_dim_factor"],
+                late_fusion=config["late_fusion"],
+                per_obs_film=config["per_obs_film"],
+                use_film=config["use_film"],
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
         noise_scheduler = DDPMScheduler(
@@ -213,26 +254,38 @@ def main(args):
                 clip_sample=True,
                 prediction_type='epsilon'
             )
-        noise_pred_net = ConditionalUnet1D(
+        if config["action_head"] == "diffusion":
+            action_head = ConditionalUnet1D(
                 input_dim=2,
-                global_cond_dim=config["encoding_size"],
+                global_cond_dim=config["encoding_size"] if not config["categorical"] else 4,
                 down_dims=config["down_dims"],
                 cond_predict_scale=config["cond_predict_scale"],
             )
-        dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        if config["action_head"] == "dense":
+            action_head = DenseNetwork_lnp(embedding_dim=config["encoding_size"] if not config["categorical"] else 4, control_horizon=config["len_traj_pred"])
+        if not config["categorical"]:
+            dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        else:
+            dist_pred_network = None
         model = LNP_MM(
             vision_encoder=vision_encoder,
-            noise_pred_net=noise_pred_net,
+            action_head=action_head,
             dist_pred_net=dist_pred_network,
+            action_head_type=config["action_head"],
         )  
     checkpoint_path = os.path.join(args.model_path, f"{args.checkpoint}.pth")
+
     latest_checkpoint = torch.load(checkpoint_path, map_location=lambda storage, loc: storage.cuda(1)) #f"cuda:{}" if torch.cuda.is_available() else "cpu")
     load_model(model, config["model_type"], latest_checkpoint)
     model.to(args.device)
     model.eval()
-
-    prompt_embedding_1 = clip_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
-    prompt_embedding_2 = clip_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
+    if config["language_encoder"] == "clip":
+        prompt_embedding_1 = clip_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
+        prompt_embedding_2 = clip_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
+    elif config["language_encoder"] == "t5":
+        print("using t5")
+        prompt_embedding_1 = t5_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
+        prompt_embedding_2 = t5_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
     context_orig = []
     for i in range(args.start_idx, args.start_idx+config["context_size"]+1):
         try:
@@ -242,19 +295,28 @@ def main(args):
     context = transform_images(context_orig, IMAGE_SIZE).to(args.device)
     viz_context = transform_images(context_orig, VISUALIZATION_IMAGE_SIZE)
     viz_img = transform_images(context_orig[-1], VISUALIZATION_IMAGE_SIZE)[0] 
-    with torch.no_grad():
-        if config["model_type"] == "rft":
-            output_1 = model(context.clone(), prompt_embedding_1).detach().cpu().numpy()
-            output_2 = model(context.clone(), prompt_embedding_2).detach().cpu().numpy()
-        elif config["model_type"] == "lnp":
-            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
-            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
-        elif config["model_type"] == "lnp_multi_modal":
-            mask_image = True
-            goal_img = torch.zeros((1, 3, 96, 96)).to(args.device)
-            output_1 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
-            output_2 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
-    compare_output(output_1, output_2, viz_img, args.prompt_1, args.prompt_2, viz_context)
+    retry = True
+    while retry:
+        with torch.no_grad():
+            if config["model_type"] == "rft":
+                output_1 = model(context.clone(), prompt_embedding_1).detach().cpu().numpy()
+                output_2 = model(context.clone(), prompt_embedding_2).detach().cpu().numpy()
+            elif config["model_type"] == "lnp":
+                output_1 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+                output_2 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+            elif config["model_type"] == "lnp_multi_modal":
+                mask_image = True
+                goal_img = torch.zeros((1, 3, 96, 96)).to(args.device)
+                output_1 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_1, args.prompt_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
+                output_2 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_2, args.prompt_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
+        
+            compare_output(output_1, output_2, viz_img, args.prompt_1, args.prompt_2, viz_context)
+        check = input("Retry? (y/n)")
+        if check == "y":
+            retry = True
+        else:
+            retry = False
+
 
 
 if __name__ == "__main__":

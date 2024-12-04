@@ -98,7 +98,6 @@ def visualize_traj_pred(
         save_path = None
         if visualize_path is not None:
             save_path = os.path.join(visualize_path, f"{str(i).zfill(4)}.png")
-
         compare_waypoints_pred_to_label(
             obs_img,
             goal_img,

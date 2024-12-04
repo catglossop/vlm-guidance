@@ -1,0 +1,392 @@
+Example: recon_tree
+Response: Based on the images provided, here is a set of detailed and clear instructions describing the robot's trajectory:
+
+1. **Initial Position:**
+   - Start facing the large tree with the building directly behind it.
+
+2. **Move Forward:**
+   - Move straight ahead for approximately 2 meters until reaching the tree.
+
+3. **Navigation Around Tree:**
+   - Turn slightly left to avoid the base of the tree.
+   - Continue to move forward, keeping the tree on your right.
+
+4. **Approach the Building:**
+   - Once you pass the tree, adjust your trajectory to the right to head towards the building.
+
+5. **Follow the Path:**
+   - Align with the visible path leading alongside the building.
+   - Move forward, keeping the building on your right.
+
+6. **Maintaining Direction:**
+   - Continue straight, maintaining a safe distance from both the building and any vegetation.
+
+7. **Adjust for Path Clearances:**
+   - Watch for obstacles such as bushes or other plants.
+   - Make slight adjustments left or right as necessary to maintain a clear path.
+
+8. **Safety Check:**
+   - Continuously scan surroundings for unexpected obstacles.
+   - Slow down if visibility is reduced or if obstacles are detected.
+
+This sequence ensures that the robot navigates effectively around the tree and towards the building, utilizing clear directions and maintaining awareness of potential obstacles.
+
+Example: sacson_window
+Response: Based on the series of egocentric observations, here’s a proposed trajectory for the robot:
+
+1. **Start**: Begin at the initial location facing down the corridor.
+   
+2. **Move Forward**: Proceed straight for approximately 10 meters. Maintain distance from the left wall with windows (landmark).
+
+3. **Landmark Identification**: Pass by a vent on the floor to the right and a visible patterned wall to the left.
+
+4. **Adjust Course**: As you notice a sign or symbol on the left wall, stay aligned to maintain trajectory.
+
+5. **Continue Forward**: Proceed towards a well-illuminated area with visible changes in floor patterns indicating progress.
+
+6. **Obstacle Check**: Monitor for any unexpected obstructions or changes in the floor surface.
+
+7. **Maintain Direction**: Keep a consistent distance from the right wall, observing the consistent design of panels or structures.
+
+8. **Landmark Verification**: Verify the passing of another vent or floor marking on the right.
+
+9. **Approach End**: Continue moving forward as the corridor opens into a larger space or terminal point.
+
+10. **Stop**: Halt at the entrance of the designated area with open views to the side.
+
+11. **Safety Check**: Perform a sensor sweep to ensure the destination is clear of immediate obstacles.
+
+These instructions aim to provide precise and actionable steps for a robot navigating this environment while accounting for landmarks and safety.
+
+Example: cory_wall
+Response: To generate navigation instructions for the robot based on the egocentric observations, I will translate the observed images into a series of detailed and actionable steps:
+
+1. **Start Position:**
+   - Observe the flat wall directly in front.
+
+2. **Move Forward:**
+   - Advance straight ahead for approximately 3 meters until the wall remains in a consistent position.
+   - **Safety Check:** Ensure the path ahead is clear of obstacles such as objects on the ground.
+
+3. **Identify Landmarks:**
+   - Note the vertical structure or marking on the wall ahead approximately halfway through the trajectory.
+   - Maintain the direction as this serves as a reference point.
+
+4. **Continue Forward:**
+   - Proceed until the vertical marking is aligned perpendicularly to your initial position.
+
+5. **Adjust Your Direction:**
+   - If needed, slightly adjust trajectory to remain parallel to the wall while continuing forward.
+
+6. **Safety and Environment Check:**
+   - Constantly scan surroundings for dynamic obstacles or changes in surface conditions, adjusting speed or direction as necessary.
+
+7. **End of Trajectory:**
+   - Continue until reaching a designated endpoint, maintaining awareness of changes or new obstacles.
+   - Prepare to stop or continue navigating based on new instructions or observations.
+
+These instructions provide a systematic approach for the robot to follow a clear and controlled path, emphasizing safety and environment awareness.
+
+Example: stanford_railing
+Response: Certainly! Below is a series of navigation instructions based on the provided images for navigating through the environment:
+
+1. **Initialize Movement:**
+   - Begin moving forward along the corridor.
+   - Keep a consistent speed, checking for any dynamic obstacles.
+
+2. **Wall Alignment:**
+   - Maintain a consistent distance of approximately 1 meter from the green wall on your left.
+   - Adjust your path to remain parallel to the wall.
+
+3. **Approaching the Rail:**
+   - Continue forward until the railing on the right becomes fully visible.
+   - Slow down to assess potential obstacles near the railing area.
+
+4. **Passing the Rail:**
+   - Stay at least 0.5 meters away from the railing on your right.
+   - Use the railing as a visual guide to maintain a straight path.
+
+5. **Environment Adjustment:**
+   - Monitor the floor for reflections or changes in surface that may require traction adjustments.
+   - Ensure overhead lights remain aligned to gauge your direction.
+
+6. **Approaching the End of Corridor:**
+   - As the bright area at the end of the corridor becomes visible, prepare to adjust path for possible turn.
+   - Slow down to moderate speed as you approach the end of the path.
+
+7. **Final Steps:**
+   - Execute a safety scan for any moving obstacles or changes at the end of the corridor.
+   - Prepare to stop or turn as necessary based on further instructions or visual cues.
+
+Remember to continually run safety checks and adjust your movement according to real-time changes in the environment.
+
+Example: sacson_lobby
+Response: ### Trajectory Instructions for Robot Navigation
+
+1. **Initial Position:**
+   - Begin at the starting point near the large window on your left side.
+
+2. **Move Forward:**
+   - Proceed straight along the corridor, maintaining alignment with the windows to your left.
+
+3. **Encounter Green Bin:**
+   - Continue forward until you reach a green bin on your right side.
+   - Adjust direction slightly to keep a safe distance from the bin.
+
+4. **Pass Yellow Poles:**
+   - Navigate past the yellow poles, ensuring they remain on your right.
+   - Reduce speed slightly as you pass to maintain precision.
+
+5. **Identify Blue Bin:**
+   - Move forward until you see a blue bin positioned ahead on the left side.
+   - Veer right slightly to avoid the bin, maintaining a safe clearance.
+
+6. **Safety Check:**
+   - Conduct a brief pause to perform a safety check around the nearby area for any moving obstacles or people.
+
+7. **Continue Forward:**
+   - Proceed straight, keeping a close watch on the surroundings as you move away from the bin.
+
+8. **Approach End Point:**
+   - Maintain trajectory until reaching the end of the hallway or the designated stopping point.
+
+9. **Finalize Position:**
+   - Stop and stabilize at the end point. Ensure the area is clear of obstacles before concluding the sequence.
+
+10. **Logging and Reporting:**
+    - Once route is completed, log the trajectory and report any encountered issues or deviations from the expected path.
+
+These detailed steps ensure the robot navigates efficiently and safely through the environment by using key landmarks and performing regular checks.
+
+Example: stanford_turn_around
+Response: Here is a detailed and concise list of instructions based on the egocentric observations:
+
+1. **Start** from the position facing the wooden cabinets on your left side.
+2. **Proceed forward** along the corridor, maintaining a parallel course to the cabinet on your left and the frosted glass on your right.
+3. **Observe** the overhead lighting for stability in low light conditions.
+4. **Continue straight** until reaching the end of the row of cabinets.
+5. **Adjust course to the right** slightly to avoid any obstacles by the glass partition.
+6. **Move forward** towards the visible doorway at the end of the corridor.
+7. **Conduct a safety check** to ensure clearance around the glass panels on both sides.
+8. **Decrease speed** as you approach the open area, checking for potential new obstacles or changes in terrain.
+9. **Stop** once you reach the doorway and await further instructions or confirmation for the next move.
+
+Example: sacson_hallway
+Response: 1. **Start**: In the hallway facing forward with glass windows to your left.
+2. **Move Forward**: Proceed straight ahead for approximately 10 meters.
+3. **Landmark**: Notice the large window panels on your left side.
+4. **Turn Right**: Upon reaching the corner, turn right towards the corridor with white walls.
+5. **Continue Forward**: Move forward with the walls on both sides for 5 meters.
+6. **Safety Check**: Observe for any potential obstacles along the path and adjust speed if necessary.
+7. **Landmark**: Note the yellow sign on the right wall.
+8. **Turn Left**: Turn left into the adjoining corridor when reaching the end.
+9. **Move Forward**: Continue moving straight for another 10 meters, keeping the glass windows to your right.
+10. **Safety Check**: Ensure the path is clear of obstructions near the windows.
+11. **Final Position**: Stop at the end of the hallway where the path opens up. 
+
+Each step is designed to be clear and actionable, providing accurate navigation through the environment.
+
+Example: recon_sidewalk
+Response: Here is a structured list of instructions based on the images provided:
+
+1. **Initial Orientation**: Start facing the walkway with a grassy area on your left and buildings on the right.
+
+2. **Move Forward**: Proceed straight along the concrete path until you reach a crossroads.
+
+3. **Encounter Landmark**: As you approach, note the pole on your left and the branching paths ahead.
+
+4. **Continue Straight**: Maintain your course on the main path, keeping the yellow building on your right as a visual guide.
+
+5. **Check for Obstacles**: Ensure the path is clear of debris or obstacles, particularly near the edges of the grass and path intersection.
+
+6. **Course Adjustment**: Slightly adjust your trajectory to the right to stay centered on the walkway.
+
+7. **Approaching Split**: As you approach the next fork in the path, verify that the left and right options are free from pedestrians or barriers.
+
+8. **Select Path**: Continue straight, disregarding the side paths, ensuring you remain oriented towards the distant building visible ahead.
+
+9. **Visual Confirmation**: Regularly assess surroundings to confirm alignment with yellow building to the right and pole to the left.
+
+10. **End of Instruction**: Stop once you reach the end of the path or encounter new landmarks for further guidance.
+
+This list ensures the robot follows a precise and obstacle-free trajectory while maintaining awareness of key landmarks and adjusting accordingly.
+
+Example: stanford_wall
+Response: Certainly! Below is a concise and structured set of instructions based on the observations provided:
+
+1. **Initialize Movement**: Begin facing the green wall.
+2. **Move Forward**: Proceed straight ahead while maintaining a consistent distance from the left wall.
+3. **Identify Landmark**: Notice the bright light source ahead as a reference point.
+4. **Adjust Trajectory**: Slightly veer to the right to align with the visible corridor.
+5. **Continuous Observation**: Monitor the position of the green wall on your left-hand side to ensure steady alignment.
+6. **Approach Open Area**: As the lighting increases, prepare to enter an open area.
+7. **Safety Check**: Scan for potential obstacles and adjust movement accordingly.
+8. **Final Positioning**: Stop at the entrance to the open area while keeping the green wall clearly visible to your left.
+
+These instructions emphasize key landmarks and necessary adjustments while considering environmental factors to ensure a smooth navigation experience.
+
+Example: outdoor_jackal
+Response: Certainly! Here is a detailed and concise list of instructions for the robot's movement, based on the egocentric observations provided:
+
+1. **Start Position**: Facing northeast. Tall grass directly ahead, large tree slightly to the left.
+   
+2. **Move Forward**: 2 meters. Maintain alignment with the center of the grass ahead.
+
+3. **Obstacle Detected - Tall Grass**: Slow speed, elevate sensors. Maintain current heading.
+
+4. **Adjust Direction**: Slight left to align parallel with the clustered trees visible to the left.
+
+5. **Continue Forward**: 3 meters past the grass patch.
+
+6. **Visual Checkpoint**: Tree on the left side now fully visible.
+
+7. **Turn Right**: 30 degrees to face the next open area, bypassing the grass on the right.
+
+8. **Advance**: 2 meters towards open terrain.
+
+9. **Obstacle Detected - More Grass**: Slow speed, move cautiously.
+
+10. **Landmark Reference**: Single large tree should be directly ahead.
+
+11. **Safety Check**: Ensure path is clear of large debris before proceeding.
+
+12. **Turn Left**: 15 degrees to adjust trajectory around the tree.
+
+13. **Proceed Forward**: 4 meters, alongside the left of the tree.
+
+14. **End Position**: Clear line of sight towards a cluster of trees near the horizon.
+
+15. **Stop and Assess**: Confirm surroundings match expected coordinates for navigation.
+
+This sequence guides the robot through observed terrain with emphasis on adjusting for obstacles and maintaining a consistent path based on visuals.
+
+Example: sacson_kitchen
+Response: To generate a detailed trajectory for the robot based on the given images, here is a list of sequential navigation instructions:
+
+1. **Start**: Begin at the yellow-framed area adjacent to the recycling bin on the left. 
+
+2. **Move Forward**: Advance straight towards the blue recycling bin.
+
+3. **Adjust Left**: Align slightly left to avoid the table and chairs on the right.
+
+4. **Continue Forward**: Pass by the furniture on the right. Note the large display screen ahead as a landmark.
+
+5. **Turn Right**: Just past the display, turn right and proceed towards the open sitting area.
+
+6. **Navigate Through Tables**: Carefully weave through the gap between tables. Watch for any moving obstacles, such as people or chairs.
+
+7. **Forward to Landmark**: Move forward towards the sitting area until you reach the edge of a tiled section.
+
+8. **Adjust Position**: Ensure you’re centered in the open area.
+
+9. **Observation Point**: Stop near the kiosk with digital signage on the left to reassess and plan the next segment.
+
+10. **Safety Check**: Confirm obstacle-free path and recalibrate sensors if necessary.
+
+11. **Return Path**: Retrace the steps back through the furniture, turning left towards the yellow frame to return to the starting point.
+
+Each step should be executed with consideration of obstacles and precise adjustment of angles to ensure smooth navigation. The robot must continually assess and adapt to any changes, particularly in areas with dynamic elements or people.
+
+Example: sacson_corner
+Response: I'm unable to provide step-by-step navigation instructions from the visual data. However, I can help you generate a detailed plan based on typical egocentric observations and the requirements you shared earlier. Here's a general example of how such instructions might be structured for a robot navigating through an indoor environment:
+
+1. **Start Point:** Begin at the entry door.
+2. **Move Forward (3 meters):** Proceed straight past the cardboard boxes on your left.
+3. **Turn Right:** At the end of the corridor, make a right turn, ensuring to avoid any obstacles.
+4. **Move Forward (5 meters):** Continue towards the brighter area.
+5. **Safety Check:** Pause briefly to detect any moving objects or humans crossing the corridor ahead.
+6. **Turn Left:** At the visible landmark (e.g., a poster or a distinct marking), make a left turn.
+7. **Move Forward (4 meters):** Proceed down the new corridor, maintaining a safe distance from the wall on your left.
+8. **Adjust for Lighting:** Compensate for the change in lighting conditions near the windows.
+9. **End Point:** Stop at the designated finish area marked with a blue bin on your right.
+
+These example steps emphasize clarity, specific movements, and situational adjustments, aligning with the goals of your revised prompt.
+
+Example: stanford_door
+Response: Based on the images, here is a sequential list of instructions for navigating through the environment, specifically focusing on interacting with the door:
+
+1. **Approach the Door**:
+   - Move forward approximately 2 meters towards the wooden door.
+   - Ensure you are aligned with the center of the door to maintain a straight approach.
+
+2. **Evaluate Door Mechanism**:
+   - Identify the handle located on the right side of the door.
+   - Check for any signage indicating if the door is push or pull.
+
+3. **Engage Door Handle**:
+   - Extend actuator to grasp the door handle.
+   - Rotate the handle clockwise to disengage the lock.
+
+4. **Open the Door**:
+   - If a push door, apply gentle forward pressure to open.
+   - If a pull door, step backward slightly while pulling the handle.
+
+5. **Safety Check**:
+   - Verify that the pathway beyond the door is clear before proceeding.
+   - Check for any automatic closing mechanism and proceed swiftly if present.
+
+6. **Pass Through the Doorway**:
+   - Move slowly through the doorway while monitoring the door edge clearance.
+   - Ensure the door does not close prematurely.
+
+7. **Continue Navigation**:
+   - Once through, realign to the new path directly ahead.
+   - Enhance sensor sweep to detect any immediate obstacles in the new area.
+
+This sequence provides clear, actionable instructions for moving through a doorway, tailored for a robotic system.
+
+Example: cory_hall
+Response: Here's a set of navigation instructions for a robot based on the images provided:
+
+1. **Start Position:**
+   - Begin at the hallway with a visible closed wooden door on the left.
+   - Ensure the path ahead is clear.
+
+2. **Move Forward:**
+   - Proceed straight for approximately 5 meters, maintaining a safe distance from the walls.
+
+3. **First Landmark:**
+   - Pass the first door on the left. The door should remain closed.
+
+4. **Adjust Course Slightly Right:**
+   - As the corridor slightly curves, adjust your heading to the right by 10 degrees to align with the path.
+
+5. **Continue Forward:**
+   - Move ahead until you reach a junction where the hallway divides.
+
+6. **Second Landmark:**
+   - Approach the second door on the right, confirming it's closed and unobstructed.
+
+7. **Safety Check:**
+   - Ensure no obstacles are present before proceeding further. Check floor for any small objects.
+
+8. **Move Past Second Landmark:**
+   - Continue past the second door, maintaining a steady speed.
+
+9. **Final Adjustment:**
+   - Adjust to the left by 10 degrees to maintain the center of the hallway, continuing until reaching the end of the corridor.
+
+10. **End Position:**
+   - Stop at the end of the hallway near another door on the right.
+
+Ensure that at each landmark, the robot performs environmental scans to anticipate any dynamic changes such as opening doors or approaching individuals.
+
+Example: cory_door
+Response: Certainly! Based on the series of egocentric observations, here is a detailed and concise list of instructions for a robot's movement through the environment:
+
+1. **Start**: Align with the initial hallway view.
+2. **Move Forward**: Proceed straight along the hallway.
+3. **Landmark**: Observe the wooden paneled walls.
+4. **Correction**: Adjust course to maintain a central position in the hallway.
+5. **Continue Forward**: Move past the initial set of panels.
+6. **Lighting Check**: Ensure adequate light from overhead fixtures.
+7. **Maintain Speed**: Keep a consistent pace to avoid collision.
+8. **Approach Corner**: Identify the end of the wall panels.
+9. **Safety Check**: Scan for obstacles or moving objects.
+10. **Adjust Right**: Slightly veer to the right to avoid the wall.
+11. **Progress Forward**: Continue moving parallel to the wall.
+12. **Reevaluate Environment**: Check for any new changes.
+13. **Ending Trajectory**: Slow down as destination nears at hallway's end.
+
+This trajectory provides clear and actionable steps with emphasis on landmarks and adjustments for navigation.
+

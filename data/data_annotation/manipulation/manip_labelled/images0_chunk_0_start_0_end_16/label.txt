@@ -1,0 +1,13 @@
+```json
+{
+  "instructions": [
+    "Pick up white egg-shaped object",
+    "Pick up sushi pieces",
+    "Move sushi pieces to sorting area",
+    "Analyze or move green pepper",
+    "Pick up or release green pepper",
+    "Continue sorting remaining objects"
+  ],
+  "reasoning": "The robot arm is engaged in a task of sorting or organizing various objects based on their type or color. Initially, it interacts with a small white object, then proceeds to pick up and handle sushi-like items indicating sorting by type. Subsequent actions focus on the green pepper, suggesting an ongoing process of identifying and placing items in a specific order. The consistency in interaction with these objects implies a systematic sorting sequence within the bin."
+}
+```

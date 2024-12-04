@@ -1,0 +1,3 @@
+Move past the door on the left
+Move towards the door on the right
+Move straight down the hallway

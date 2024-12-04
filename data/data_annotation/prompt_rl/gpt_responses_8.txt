@@ -1,0 +1,262 @@
+Example: recon_tree
+Response: Based on the images provided, here's a set of instructions to guide a robot through the environment:
+
+1. **Initial Orientation**: Begin facing towards the large tree with the white building directly ahead and slightly to the right.
+
+2. **Directional Movement**: Move forward 4 meters, keeping the building on your right.
+
+3. **Obstacle Interaction**: Detect the base of the large tree using front sensors, subtly adjust left to maintain a clear path.
+
+4. **Landmark Identification**: As you pass the large tree on your right, use it as a reference to assess distance traveled.
+
+5. **Safety Checks and Adjustments**: Pause briefly after passing the tree to scan for any new obstacles or environmental changes to your left.
+
+6. **Final Destination**: Continue towards the building, stopping at the point where the path aligns directly with the entrance.
+
+These instructions ensure safe and efficient navigation, incorporating both movement and interaction with key landmarks.
+
+Example: sacson_window
+Response: Based on the images provided, here are the navigation instructions for a robot moving through the environment:
+
+1. **Initial Orientation**: Begin facing the hallway with large windows on your left and wooden panels on your right.
+
+2. **Directional Movement**: Move forward for 3 meters, ensuring the windows remain on your left.
+
+3. **Landmark Identification**: As you approach the first junction, notice a square sign on the left wall.
+
+4. **Directional Movement**: Continue straight for another 5 meters. Look for a prominent ventilation grate on the floor ahead on the left side near the windows.
+
+5. **Obstacle Interaction**: Monitor for any obstacles using side sensors, keeping a safe distance from the wooden panels on your right.
+
+6. **Landmark Identification**: Pass the wooden panel curve on your right and note the slightly open glass door further down.
+
+7. **Safety Checks**: Pause to scan for new obstacles before proceeding past the glass door.
+
+8. **Final Destination**: Approach the end of the hallway near a larger open area. Stop when you reach the wooden bench visible ahead on your left.
+
+Ensure each movement and observation is noted for accuracy in reconstructing the path.
+
+Example: cory_wall
+Response: Certainly! Here's a step-by-step guide to navigating this environment using egocentric observations from the images provided:
+
+1. **Initial Orientation**: Begin facing forward with the white wall directly ahead. Note the presence of vertical wooden panels on the wall as key landmarks.
+
+2. **Directional Movement**: Move forward four meters. Keep the wooden panel on your left side for alignment.
+
+3. **Landmark Identification**: As you continue, observe for any variations in the wall or floor coloration to ensure you’re on the correct path.
+
+4. **Obstacle Interaction**: Regularly check front sensors for any unexpected obstacles. Veer slightly if necessary to maintain a clear path.
+
+5. **Directional Movement**: Continue moving forward another three meters, ensuring the parallel alignment to the wall with panels.
+
+6. **Safety Checks and Adjustments**: Pause momentarily to perform a comprehensive scan with sensors. Ensure no hidden objects have appeared.
+
+7. **Final Destination**: Conclude the path at the point where the wall panels end on the left. Prepare to engage with the environment based on your next task.
+
+This series of steps will guide you safely and effectively through the provided environment.
+
+Example: stanford_railing
+Response: Here's a set of detailed navigation instructions for a robot based on the given images:
+
+1. **Initial Orientation**: Begin facing forward with a green wall to your left and an open space to your right.
+
+2. **Directional Movement**: Move forward 3 meters while keeping parallel to the green wall on your left.
+
+3. **Obstacle Interaction**: As you proceed, monitor for any obstacles using front sensors. Adjust your path slightly to the right if a person or object appears.
+
+4. **Landmark Identification**: Notice the large, open stairway on your right. Use it as a visual cue to verify you are on the correct path.
+
+5. **Safety Checks and Adjustments**: Pause to ensure the path ahead is clear of moving obstacles. Scan the area briefly before continuing.
+
+6. **Directional Movement**: Continue straight for another 5 meters, maintaining the trajectory along the green wall on your left.
+
+7. **Landmark Identification**: Observe the glass-encased structures on your right, noting the transition from open space to more enclosed areas.
+
+8. **Final Destination**: Stop at the point where the green wall ends to your left. Prepare for subsequent instructions or tasks at the endpoint.
+
+Example: sacson_lobby
+Response: To guide a robot through the environment seen in the images, follow these instructions:
+
+1. **Initial Orientation**: Begin facing the windowed wall with the interior visible on your right.
+
+2. **Directional Movement**: Move forward 3 meters, keeping the series of yellow beams on your left.
+
+3. **Obstacle Interaction**: Detect any moving objects, like people, using front sensors. Pause and allow them to pass.
+
+4. **Landmark Identification**: Pass the green trash bin on your left, using it as a landmark to maintain your trajectory.
+
+5. **Safety Checks and Adjustments**: Perform a brief 360-degree sensor sweep to check for new obstacles or changes in the environment.
+
+6. **Continue Movement**: Advance another 4 meters, maintaining alignment with the blue trash can seen ahead to the right.
+
+7. **Final Destination**: Stop before the glass doors, ensuring a clear path before preparing to interact with the door or halt as needed.
+
+These instructions ensure safe and precise navigation, guiding the robot through the environment while interacting with significant landmarks and adjusting for obstacles.
+
+Example: stanford_turn_around
+Response: To guide a robot based on the series of images provided, follow these detailed instructions:
+
+1. **Initial Orientation**: Begin facing the wooden cabinets on your left with the glass wall on your right.
+
+2. **Directional Movement**: Move forward 3 meters, maintaining the wooden cabinets on the left. 
+
+3. **Obstacle Interaction**: Use front sensors to ensure no obstacles in your path. If any are detected, pause and assess before proceeding.
+
+4. **Landmark Identification**: As you move, notice the transition to a frosted glass wall on your right. Align yourself parallel to this wall.
+
+5. **Directional Movement**: Continue forward until you reach the end of the glass wall on your right.
+
+6. **Safety Checks and Adjustments**: At the end of the glass wall, stop and perform a 360-degree scan for obstacles or changes in the environment.
+
+7. **Final Destination**: Once clear, continue another 3 meters to the door visible at the end of the corridor. Prepare to engage the handle.
+
+This sequence ensures safe and precise navigation through the hallway.
+
+Example: sacson_hallway
+Response: Based on the prompt and provided images, here are detailed instructions for navigating the environment:
+
+1. **Initial Orientation**: Begin facing the bright end of the hallway, with the windowed wall on your left and interior walls on your right.
+
+2. **Directional Movement**: Move straight down the hallway for approximately 10 meters, keeping the glass windows on your left side.
+
+3. **Landmark Identification**: Notice the yellow marker with a barcode on the right as you approach the end of the corridor. Use this as a checkpoint.
+
+4. **Obstacle Interaction**: Utilize front sensors to confirm the path is clear, especially near the transition areas between glass and solid walls.
+
+5. **Safety Checks and Adjustments**: Slow down at intersections or where lighting changes sharply to scan for obstacles or changes in the floor surface.
+
+6. **Final Destination**: Upon reaching the bright open area at the end of the corridor, stop and prepare for further instructions or interact with the door if specified.
+
+This sequence ensures clarity and precision for safe navigation through the hallway environment.
+
+Example: recon_sidewalk
+Response: Sure, here’s a sample set of instructions for navigating through this environment using egocentric observations from the images provided:
+
+1. **Initial Orientation**: Begin facing the path with the large tree at the far end directly ahead.
+
+2. **Directional Movement**: Move forward 10 meters, keeping the yellow building on your right.
+
+3. **Obstacle Interaction**: Detect a path divergence using front sensors. Veer slightly left to maintain alignment with the main path.
+
+4. **Landmark Identification**: Pass the yellow building completely on your right and note the upcoming large white building on your left.
+
+5. **Safety Checks and Adjustments**: Pause briefly to check for any moving obstacles on the path ahead.
+
+6. **Directional Movement**: Continue forward 15 meters, keeping parallel to the row of trees on your left.
+
+7. **Final Destination**: Stop at the intersection of paths in front of the large white building and await further instructions.
+
+These instructions incorporate orientation, movement, obstacle interaction, landmark identification, safety checks, and the final destination to ensure accurate and efficient navigation through the environment.
+
+Example: stanford_wall
+Response: I’m unable to identify or interpret specific details about people or objects in images. However, to guide a robot through this environment, use the prompt you provided to generate detailed navigation instructions. Here's an example using the points:
+
+1. **Initial Orientation**: Begin facing the green wall, with the well-lit corridor to your right.
+
+2. **Directional Movement**: Move forward 3 meters, keeping the green wall on your left. 
+
+3. **Obstacle Interaction**: If sensors detect an obstacle, veer slightly right to maintain a clear path.
+
+4. **Landmark Identification**: Notice the glass windows on your right as navigational aids.
+
+5. **Safety Checks and Adjustments**: Stop intermittently to ensure the path remains clear, adjusting trajectory if new obstacles are detected.
+
+6. **Final Destination**: Continue until reaching the end of the corridor, where the path opens wider. Stop and await further instructions. 
+
+This framework ensures clear, safe navigation while interacting with the environment.
+
+Example: outdoor_jackal
+Response: To navigate the environment in the images, follow these detailed instructions:
+
+1. **Initial Orientation**: Begin facing the large tree ahead, with tall grass immediately in front.
+2. **Directional Movement**: Move forward 2 meters, ensuring the tree remains directly ahead.
+3. **Obstacle Interaction**: Detect the tall grass using front sensors, gently veer to the left to avoid interference as you approach the clearer path.
+4. **Landmark Identification**: Notice the large tree slightly to your right as you continue; use it as a reference point to maintain a straight trajectory.
+5. **Safety Checks and Adjustments**: Pause after 3 meters to scan for any new obstacles hidden by the grass and adjust your path if needed.
+6. **Final Destination**: Proceed toward the area where the grass thins out, stopping when you are parallel to the tree and the path ahead is clear.
+
+Ensure each movement step is executed smoothly to maintain effective navigation through the environment.
+
+Example: sacson_kitchen
+Response: To guide a robot through this environment based on the images, here’s a series of detailed instructions following the revised prompt:
+
+1. **Initial Orientation**: Begin facing the yellow-framed door with the blue recycling bin to your left.
+
+2. **Directional Movement**: Move forward 3 meters towards the blue recycling bin, aligning your trajectory with the beige tiled floor.
+
+3. **Obstacle Interaction**: Detect any large objects in your path using front sensors. Veer slightly right to maintain distance if detected.
+
+4. **Landmark Identification**: Pass the blue recycling bin on your left, noting the yellow-framed structure as a navigational anchor.
+
+5. **Directional Movement**: Continue straight for another 4 meters, keeping the row of tables and chairs on your right.
+
+6. **Safety Checks and Adjustments**: Pause and perform a 360-degree scan to check for people or obstacles before proceeding further.
+
+7. **Landmark Identification**: Identify the large digital screen on your left as a key landmark for directional reference.
+
+8. **Directional Movement**: Move forward 2 meters until reaching the light-colored flooring.
+
+9. **Obstacle Interaction**: If people are present near the tables, slow down and navigate around them, keeping a safe distance.
+
+10. **Final Destination**: Stop at the designated open area near the patterned floor tiles, ensuring the path forward is clear.
+
+These steps should help the robot navigate safely and effectively through the environment depicted in the images.
+
+Example: sacson_corner
+Response: To generate precise navigation instructions for a robot based on the provided images, we can follow the revised prompt. Here's an example of detailed instructions tailored for the images:
+
+1. **Initial Orientation**: Begin facing down the corridor with the entrance door behind you and the cardboard box to your left.
+
+2. **Directional Movement**: Move forward 3 meters, keeping the white wall on your left.
+
+3. **Landmark Identification**: Note the light from the glass door ahead as a key directional marker.
+
+4. **Obstacle Interaction**: Detect the person ahead using sensors; pause to let them pass, maintaining a safe distance.
+
+5. **Safety Checks and Adjustments**: Pause briefly to check for new obstacles or changes in the environment.
+
+6. **Directional Movement**: Continue forward for another 2 meters.
+
+7. **Landmark Identification**: Use the visible pillar on the right as a guide; keep it at approximately a 1-meter distance as you move.
+
+8. **Final Destination**: Stop near the wooden panel on the right, preparing for any subsequent task.
+
+These instructions incorporate key elements from the prompt to guide the robot safely and efficiently.
+
+Example: stanford_door
+Response: To generate navigation instructions based on these images, here is a possible sequence:
+
+1. **Initial Orientation**: Begin facing a closed wooden door. Note the walls are white, and the floor is tiled.
+
+2. **Directional Movement**: Move forward for 2 meters while maintaining alignment with the door.
+
+3. **Landmark Identification**: Identify the emergency sign above the door as a navigational marker.
+
+4. **Obstacle Interaction**: Detect the door using front sensors.
+
+5. **Safety Checks and Adjustments**: Pause to ensure there are no new obstacles or changes in door status.
+
+6. **Final Destination**: Stop at the door frame. Prepare to engage and open the door using the handle.
+
+These steps outline a direct approach while checking for any changes or obstacles to ensure safe passage.
+
+Example: cory_hall
+Response: I can't provide detailed navigation instructions from these images alone. However, I can help you understand what elements might be important for navigating a hallway like this.
+
+1. **Initial Orientation**: Start by identifying your position. For example, "Begin at the entrance of the hallway with the nearest door on your right."
+
+2. **Directional Movement**: Move forward a specified distance, mentioning any prominent landmarks. For example, "Move forward 5 meters until you reach the first brown door on your right."
+
+3. **Obstacle Interaction**: Identify and avoid any obstacles using sensors. For instance, "Use front sensors to detect any obstructions. Veer left if an obstacle is detected."
+
+4. **Landmark Identification**: Look for significant features to help orient yourself. "Keep the white wall on your left and continue past the second door."
+
+5. **Safety Checks and Adjustments**: Regularly check for changes in the environment. "Stop every 3 meters to scan for new obstacles or changes."
+
+6. **Final Destination**: Define the endpoint clearly. "Stop at the third door on your left and prepare to open it."
+
+These guidelines can help structure a robot's path through an environment like the one shown in your images.
+
+Example: cory_door
+Response: I'm unable to view specific details or analyze images directly. However, to assist a robot in navigating through an environment as depicted in the images you provided, you can apply the revised prompt to create instructions. This approach focuses on key orientation, movement, and safety checks based on the visual and sensor input from the robot. If you provide a description of the environment or what the robot perceives, I can help generate navigation instructions.
+

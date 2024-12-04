@@ -84,4 +84,77 @@ go_stanford_labelled:
 scand_labelled:
   metric_waypoint_spacing: 0.38
 
+# ATOMIC
+sacson_atomic_left: 
+  metric_waypoint_spacing: 0.255
+sacson_atomic_right: 
+  metric_waypoint_spacing: 0.255
+sacson_atomic_forward: 
+  metric_waypoint_spacing: 0.255
+sacson_atomic_stop: 
+  metric_waypoint_spacing: 0.255
+
+cory_hall_atomic_left: 
+  metric_waypoint_spacing: 0.06
+cory_hall_atomic_right: 
+  metric_waypoint_spacing: 0.06
+cory_hall_atomic_forward: 
+  metric_waypoint_spacing: 0.06
+cory_hall_atomic_stop: 
+  metric_waypoint_spacing: 0.06
+
+go_stanford_cropped_atomic_left:
+  metric_waypoint_spacing: 0.12
+go_stanford_cropped_atomic_right:
+  metric_waypoint_spacing: 0.12
+go_stanford_cropped_atomic_forward:
+  metric_waypoint_spacing: 0.12
+go_stanford_cropped_atomic_stop:
+  metric_waypoint_spacing: 0.12
+
+go_stanford2_atomic_left:
+  metric_waypoint_spacing: 0.12
+go_stanford2_atomic_right:
+  metric_waypoint_spacing: 0.12
+go_stanford2_atomic_forward:
+  metric_waypoint_spacing: 0.12
+go_stanford2_atomic_stop:
+  metric_waypoint_spacing: 0.12
+
+scand_atomic_left:
+  metric_waypoint_spacing: 0.38
+scand_atomic_right:
+  metric_waypoint_spacing: 0.38
+scand_atomic_forward:
+  metric_waypoint_spacing: 0.38
+scand_atomic_stop:
+  metric_waypoint_spacing: 0.38
+
+tartan_drive_atomic_left:
+  metric_waypoint_spacing: 0.72
+tartan_drive_atomic_right:
+  metric_waypoint_spacing: 0.72
+tartan_drive_atomic_forward:
+  metric_waypoint_spacing: 0.72
+tartan_drive_atomic_stop:
+  metric_waypoint_spacing: 0.72
+
+seattle_atomic_left:
+  metric_waypoint_spacing: 0.35
+seattle_atomic_right:
+  metric_waypoint_spacing: 0.35
+seattle_atomic_forward:
+  metric_waypoint_spacing: 0.35
+seattle_atomic_stop:
+  metric_waypoint_spacing: 0.35
+
+recon_atomic_left:
+  metric_waypoint_spacing: 0.25
+recon_atomic_right:
+  metric_waypoint_spacing: 0.25
+recon_atomic_forward:
+  metric_waypoint_spacing: 0.25
+recon_atomic_stop:
+  metric_waypoint_spacing: 0.25
+
 # add your own dataset params here:

@@ -168,6 +168,7 @@ def train_eval_loop_multimodal(
     eval_freq: int = 1,
     save_freq: int = 1,
     linear_output: bool = False,
+    categorical: bool = False,
 ):
     """
     Train and evaluate the model for several epochs (vint or gnm models)
@@ -222,6 +223,7 @@ def train_eval_loop_multimodal(
                 num_images_log=num_images_log,
                 use_wandb=use_wandb,
                 alpha=alpha,
+                categorical=categorical,
             )
             lr_scheduler.step()
 
@@ -254,6 +256,7 @@ def train_eval_loop_multimodal(
                 loader = test_dataloaders[dataset_type]
                 evaluate_lnp_multimodal(
                     eval_type=dataset_type,
+                    model=model,
                     ema_model=ema_model,
                     dataloader=loader,
                     transform=transform,
@@ -268,6 +271,8 @@ def train_eval_loop_multimodal(
                     use_wandb=use_wandb,
                     eval_fraction=eval_fraction,
                     linear_output=linear_output,
+                    categorical=categorical,
+                    alpha=alpha,
                 )
         wandb.log({
             "lr": optimizer.param_groups[0]["lr"],
