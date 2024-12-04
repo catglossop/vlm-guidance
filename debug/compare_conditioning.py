@@ -286,7 +286,6 @@ def main(args):
         print("using t5")
         prompt_embedding_1 = t5_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
         prompt_embedding_2 = t5_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
-
     context_orig = []
     for i in range(args.start_idx, args.start_idx+config["context_size"]+1):
         try:
