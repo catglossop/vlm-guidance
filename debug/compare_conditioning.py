@@ -130,10 +130,36 @@ def load_config(config_path):
 
 
 def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding, prompt, pred_horizon, action_dim, num_samples, batch_size, linear_output, device, mask_image=False):
-    if linear_output:
-        return model(context.clone(), prompt_embedding).detach().cpu().numpy()
-    else:
-        return model_output_diffusion_eval(model, noise_scheduler, context.clone(), prompt_embedding, prompt, goal_img, pred_horizon, action_dim, num_samples, batch_size, device, mask_image)["actions"].detach().cpu().numpy()
+    # if model.action_head_type == "dense":
+    #     if model.action_head.embedding_dim == 4:
+    #         if prompt == "Turn left":
+    #             prompt_embedding = torch.tensor([1, 0, 0, 0]).to(device).unsqueeze(0)
+    #         elif prompt == "Turn right":
+    #             prompt_embedding = torch.tensor([0, 1, 0, 0]).to(device).unsqueeze(0)
+    #         elif prompt == "Go forward":
+    #             prompt_embedding = torch.tensor([0, 0, 1, 0]).to(device).unsqueeze(0)
+    #         elif prompt == "Stop":
+    #             prompt_embedding = torch.tensor([0, 0, 0, 1]).to(device).unsqueeze(0)
+    try:
+        categorical = model.action_head.embedding_dim == 4
+    except:
+        categorical = False
+    output = model_output_diffusion_eval(
+        model,
+        noise_scheduler,
+        context.clone(),
+        prompt_embedding.float(),
+        [prompt],
+        goal_img,
+        pred_horizon,
+        action_dim,
+        num_samples,
+        batch_size,
+        device,
+        mask_image,
+        categorical,
+    )
+    return output["actions"].detach().cpu().numpy()
         
 def main(args): 
     config = load_config(args.config)
@@ -224,6 +250,7 @@ def main(args):
                 late_fusion=config["late_fusion"],
                 per_obs_film=config["per_obs_film"],
                 use_film=config["use_film"],
+                use_transformer=config["use_transformer"],
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
         noise_scheduler = DDPMScheduler(
@@ -232,18 +259,24 @@ def main(args):
                 clip_sample=True,
                 prediction_type='epsilon'
             )
-        noise_pred_net = ConditionalUnet1D(
+        if config["action_head"] == "diffusion":
+            action_head = ConditionalUnet1D(
                 input_dim=2,
-                global_cond_dim=config["encoding_size"],
+                global_cond_dim=config["encoding_size"] if not config["categorical"] else 4,
                 down_dims=config["down_dims"],
                 cond_predict_scale=config["cond_predict_scale"],
             )
-        dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        if config["action_head"] == "dense":
+            action_head = DenseNetwork_lnp(embedding_dim=config["encoding_size"] if not config["categorical"] else 4, control_horizon=config["len_traj_pred"])
+        if not config["categorical"]:
+            dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        else:
+            dist_pred_network = None
         model = LNP_MM(
             vision_encoder=vision_encoder,
-            action_head=noise_pred_net,
+            action_head=action_head,
             dist_pred_net=dist_pred_network,
-            action_head_type="diffusion",
+            action_head_type=config["action_head"],
         )  
     checkpoint_path = os.path.join(args.model_path, f"{args.checkpoint}.pth")
 

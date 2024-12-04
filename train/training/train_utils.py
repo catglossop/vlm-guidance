@@ -893,7 +893,6 @@ def train_lnp_multimodal(
                 dataset_index,
                 action_mask,
             ) = data
-
             obs_images = torch.split(obs_image, 3, dim=1)
             viz_obs_image = TF.resize(obs_images[-1], VISUALIZATION_IMAGE_SIZE)
             viz_goal_image = TF.resize(goal_image, VISUALIZATION_IMAGE_SIZE)
@@ -915,10 +914,20 @@ def train_lnp_multimodal(
             if categorical: 
                 obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
                 obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
-                obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
-                obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
-                obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
-                obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+                for j in range(len(lang)):
+                    if lang[j] == "Turn left":
+                        obsgoal_cond[j,0] = 1
+                    elif lang[j] == "Turn right":
+                        obsgoal_cond[j,1] = 1
+                    elif lang[j] == "Go forward":
+                        obsgoal_cond[j,2] = 1
+                    elif lang[j] == "Stop":
+                        obsgoal_cond[j,3] = 1
+                # obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
+                # obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
+                # obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
+                # obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
             naction = from_numpy(ndeltas).to(device)
@@ -1150,10 +1159,21 @@ def evaluate_lnp_multimodal(
                 if categorical: 
                     obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
                     obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
-                    obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
-                    obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
-                    obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
-                    obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+                    # obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
+                    # obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
+                    # obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
+                    # obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+                    obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
+                    obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
+                    for j in range(len(lang)):
+                        if lang[j] == "Turn left":
+                            obsgoal_cond[j,0] = 1
+                        elif lang[j] == "Turn right":
+                            obsgoal_cond[j,1] = 1
+                        elif lang[j] == "Go forward":
+                            obsgoal_cond[j,2] = 1
+                        elif lang[j] == "Stop":
+                            obsgoal_cond[j,3] = 1
 
                 deltas = get_delta(action_label)
                 ndeltas = normalize_data(deltas, ACTION_STATS)
@@ -1336,10 +1356,21 @@ def model_output_diffusion(
     if categorical:
         obsgoal_cond = obsgoal_cond.reshape((batch_size,-1))
         obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
-        obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
-        obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
-        obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
-        obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+        # obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
+        # obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
+        # obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
+        # obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+        obsgoal_cond = obsgoal_cond.reshape((obs_image.size(0),-1))
+        obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
+        for j in range(len(lang)):
+            if lang[j] == "Turn left":
+                obsgoal_cond[j,0] = 1
+            elif lang[j] == "Turn right":
+                obsgoal_cond[j,1] = 1
+            elif lang[j] == "Go forward":
+                obsgoal_cond[j,2] = 1
+            elif lang[j] == "Stop":
+                obsgoal_cond[j,3] = 1
 
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
     if model.action_head_type == "diffusion":
@@ -1395,11 +1426,20 @@ def model_output_diffusion_eval(
     obsgoal_cond = obsgoal_cond.reshape(shape=(batch_size, -1))
     if categorical:
         obsgoal_cond = obsgoal_cond.reshape((batch_size,-1))
-        obsgoal_cond = torch.zeros((obs_image.size(0), 4), device=device)
-        obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
-        obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
-        obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
-        obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+        obsgoal_cond = torch.zeros((batch_size, 4), device=device)
+        # obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
+        # obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
+        # obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
+        # obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
+        for j in range(len(batch_lang)):
+            if batch_lang[j] == "Turn left":
+                obsgoal_cond[j,0] = 1
+            elif batch_lang[j] == "Turn right":
+                obsgoal_cond[j,1] = 1
+            elif batch_lang[j] == "Go forward":
+                obsgoal_cond[j,2] = 1
+            elif batch_lang[j] == "Stop":
+                obsgoal_cond[j,3] = 1
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
 
     if model.action_head_type == "diffusion":
@@ -1433,6 +1473,7 @@ def model_output_diffusion_eval(
         return {
             'actions': actions_dense,
         }
+
 
 # Utils for Group Norm
 def replace_bn_with_gn(
