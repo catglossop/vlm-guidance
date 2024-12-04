@@ -44,17 +44,18 @@ down_dims: [64, 128, 256]
 num_diffusion_iters: 15
 linear_output: False
 goal_mask_prob: 0.0
-late_fusion: True
+late_fusion: False
 per_obs_film: False
 use_film: True
 categorical: False
+use_transformer: True
 
 # normalization for the action space
 normalize: True
 
 # context
 context_type: temporal
-context_size: 1 # 5
+context_size: 2 # 5
 alpha: 0.01
 
 # distance bounds for distance and action and distance predictions 

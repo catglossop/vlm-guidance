@@ -5,7 +5,7 @@ import torchvision
 from typing import List, Dict, Optional, Tuple, Callable
 from efficientnet_pytorch import EfficientNet
 from model.lelan.self_attention import PositionalEncoding
-
+from einops import rearrange
 import clip
 
 class LNP_comp(nn.Module):
@@ -207,6 +207,7 @@ class LNPMultiModal(nn.Module):
         late_fusion: bool = False,
         per_obs_film: bool = False,
         use_film: bool = False,
+        use_transformer: bool = False,
     ) -> None:
         """
         NoMaD ViNT Encoder class
@@ -220,6 +221,7 @@ class LNPMultiModal(nn.Module):
         self.late_fusion = late_fusion
         self.per_obs_film = per_obs_film
         self.use_film = use_film
+        self.use_transformer = use_transformer
 
         # Initialize FiLM Model
         if self.per_obs_film:
@@ -340,43 +342,53 @@ class LNPMultiModal(nn.Module):
         # # obsgoal_encoding = torch.cat((obs_encoding_final, obsgoal_encoding), dim=1)  
         # if len(obsgoal_encoding.shape) == 2:
         #     obsgoal_encoding = obsgoal_encoding.unsqueeze(1)
-        # assert obsgoal_encoding.shape[2] == self.goal_encoding_size   
-
-        # # Apply positional encoding 
-        # if self.positional_encoding:
-        #     obsgoal_encoding = self.positional_encoding(obsgoal_encoding)
-        
-        # # If a goal mask is provided
-        # if input_goal_mask is not None:
-        #     no_goal_mask = input_goal_mask.long() # (B, ) which is 1 is goal is masked and 0 otherwise
-        #     no_goal_mask[no_goal_mask == -1] = 0
-        #     goal_select = torch.ones(no_goal_mask.shape, dtype=torch.bool)
-        #     no_goal_mask = no_goal_mask * goal_select.to(device)
-        #     no_goal_mask[input_goal_mask == -1] = 2 # mask out the lanuage goal as there is not language
-        #     print(f"Neither masked: {torch.round(torch.sum(no_goal_mask == 0)/no_goal_mask.shape[0]*100, decimals=3)}%")
-        #     print(f"Image masked: {torch.round(torch.sum(no_goal_mask == 1)/no_goal_mask.shape[0]*100, decimals=3)}%")
-        #     print(f"Language masked: {torch.round(torch.sum(input_goal_mask == -1)/no_goal_mask.shape[0]*100, decimals=3)}%")
-        #     src_key_padding_mask = torch.index_select(self.all_masks.to(device), 0, no_goal_mask)
-        # else:
-        #     src_key_padding_mask = None
-
-        # obs_encoding_tokens = self.sa_encoder(obsgoal_encoding, src_key_padding_mask=src_key_padding_mask)
-
-        # # Reconfigure avg_mask for given goal config
-        # if src_key_padding_mask is not None:
-        #     avg_mask = torch.index_select(self.avg_pool_mask.to(device, dtype=torch.bool), 0, no_goal_mask).unsqueeze(-1)
-        #     obs_encoding_tokens = obs_encoding_tokens * avg_mask
-        
-        # obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
-
-        obs_encoding = torch.mean(obs_encoding, dim=1)
-        if self.late_fusion:
-            obs_encoding_tokens = torch.cat((obs_encoding, feat_text), dim=1)
+        # assert obsgoal_encoding.shape[2] == self.goal_encoding_size
+        if self.use_transformer:
+            B = feat_text.shape[0]
+            lang_token = self.compress_final_enc(feat_text) if feat_text.shape[1] != self.goal_encoding_size else feat_text
+            lang_tokens = lang_token.unsqueeze(1).repeat(1, obs_encoding.shape[1], 1)
+            tokens = torch.stack((obs_encoding, lang_tokens), dim=2)
+            tokens = tokens.reshape(B, -1, self.goal_encoding_size)
+            # Apply positional encoding 
+            if self.positional_encoding:
+                tokens = self.positional_encoding(tokens)
+            obs_encoding_tokens = self.sa_encoder(tokens)
+            obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
+            return obs_encoding_tokens
         else:
-            obs_encoding_tokens = feat_text
-        if obs_encoding_tokens.shape[1] != self.goal_encoding_size:
-            obs_encoding_tokens = self.compress_final_enc(obs_encoding_tokens)
-        return obs_encoding_tokens
+            obs_encoding = torch.mean(obs_encoding, dim=1)
+            if self.late_fusion:
+                obs_encoding_tokens = torch.cat((obs_encoding, feat_text), dim=1)
+            else:
+                obs_encoding_tokens = feat_text
+            if obs_encoding_tokens.shape[1] != self.goal_encoding_size:
+                obs_encoding_tokens = self.compress_final_enc(obs_encoding_tokens)
+            return obs_encoding_tokens
+        
+# # If a goal mask is provided
+# if input_goal_mask is not None:
+#     no_goal_mask = input_goal_mask.long() # (B, ) which is 1 is goal is masked and 0 otherwise
+#     no_goal_mask[no_goal_mask == -1] = 0
+#     goal_select = torch.ones(no_goal_mask.shape, dtype=torch.bool)
+#     no_goal_mask = no_goal_mask * goal_select.to(device)
+#     no_goal_mask[input_goal_mask == -1] = 2 # mask out the lanuage goal as there is not language
+#     print(f"Neither masked: {torch.round(torch.sum(no_goal_mask == 0)/no_goal_mask.shape[0]*100, decimals=3)}%")
+#     print(f"Image masked: {torch.round(torch.sum(no_goal_mask == 1)/no_goal_mask.shape[0]*100, decimals=3)}%")
+#     print(f"Language masked: {torch.round(torch.sum(input_goal_mask == -1)/no_goal_mask.shape[0]*100, decimals=3)}%")
+#     src_key_padding_mask = torch.index_select(self.all_masks.to(device), 0, no_goal_mask)
+# else:
+#     src_key_padding_mask = None
+
+# obs_encoding_tokens = self.sa_encoder(obsgoal_encoding, src_key_padding_mask=src_key_padding_mask)
+
+# # Reconfigure avg_mask for given goal config
+# if src_key_padding_mask is not None:
+#     avg_mask = torch.index_select(self.avg_pool_mask.to(device, dtype=torch.bool), 0, no_goal_mask).unsqueeze(-1)
+#     obs_encoding_tokens = obs_encoding_tokens * avg_mask
+
+# obs_encoding_tokens = torch.mean(obs_encoding_tokens, dim=1)
+
+
 
 
 class LNP_clip_FiLM(nn.Module):

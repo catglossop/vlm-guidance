@@ -1441,7 +1441,6 @@ def model_output_diffusion_eval(
             elif batch_lang[j] == "Stop":
                 obsgoal_cond[j,3] = 1
     obsgoal_cond = obsgoal_cond.repeat_interleave(num_samples, dim=0)
-    breakpoint()
 
     if model.action_head_type == "diffusion":
         # initialize action from Gaussian noise

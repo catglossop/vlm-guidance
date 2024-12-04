@@ -347,9 +347,9 @@ class LCBCDataset(Dataset):
             print(f"Trajectory {f_curr} does not have text features")
         else:
             lang_embed = curr_traj_data["text_features"]
-            # random_ind = np.random.randint(0, lang_embed.shape[0])
-            selected_lang_embed = lang_embed[0, :]
-            selected_lang = curr_traj_data["language_instruction"]
+            random_ind = np.random.randint(0, lang_embed.shape[0])
+            selected_lang_embed = lang_embed[random_ind, :]
+            selected_lang = [curr_traj_data["language_instruction"], curr_traj_data["varied_language_instruction"]][random_ind]
 
         # Compute actions
         actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time)

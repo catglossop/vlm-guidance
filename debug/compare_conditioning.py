@@ -246,6 +246,7 @@ def main(args):
                 late_fusion=config["late_fusion"],
                 per_obs_film=config["per_obs_film"],
                 use_film=config["use_film"],
+                use_transformer=config["use_transformer"],
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
         noise_scheduler = DDPMScheduler(
