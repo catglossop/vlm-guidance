@@ -144,7 +144,11 @@ def main(args):
             while searching: 
                 current_path = np.random.choice(possible_imgs)
                 print(current_path)
+                traj_data = np.load(os.path.join(("/").join(current_path.split("/")[:-1]), "traj_data.pkl"), allow_pickle=True)
+                language_annotations = [lang["traj_description"] for lang in traj_data["language_annotations"]]
                 current_img = Image.open(current_path)
+                print("LANGUAGE: ")
+                print(language_annotations)
                 response = input("Use this image? (y/n): ")
                 plt.imshow(current_img)
                 plt.show()

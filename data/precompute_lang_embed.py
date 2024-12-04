@@ -16,7 +16,7 @@ REDO = True
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled"
-input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets_backup"
+input_path = "/home/cglossop/lcbc_datasets"
 lang_txt_paths = glob.glob(f"{input_path}/*/*/traj_data.pkl", recursive=True)
 if USE_CLIP:
     model_version = "ViT-B/32"
@@ -34,7 +34,10 @@ for path in tqdm(lang_txt_paths):
         traj_data = pkl.load(old_file)
     if "text_features" in traj_data.keys():
         continue
-    lang_annotations = traj_data["language_annotations"]
+    try:
+        lang_annotations = traj_data["language_annotations"]
+    except:
+        continue
     if USE_CLIP:
         try:
             prompts = clip.tokenize([lang["traj_description"] for lang in lang_annotations]).to(device)

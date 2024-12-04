@@ -4,9 +4,10 @@ run_name: lelan_multi_modal
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
 train: True
-batch_size: 128
+batch_size: 256
 epochs: 200
-gpu_ids: [0]
+gpu_ids: [1]
+all_gpu_ids: [0,1,2,3,4,5,6,7]
 num_workers: 12
 lr: 1e-4
 optimizer: adamw
@@ -24,6 +25,7 @@ seed: 0
 model: lnp
 model_type: lnp_multi_modal
 language_encoder: t5
+action_head: diffusion
 vision_encoder: lnp_multi_modal
 efficientnet_model: efficientnet-b2
 encoding_size: 256
@@ -43,6 +45,9 @@ num_diffusion_iters: 15
 linear_output: False
 goal_mask_prob: 0.0
 late_fusion: False
+per_obs_film: false
+use_film: True
+categorical: False
 
 # normalization for the action space
 normalize: True
@@ -50,7 +55,7 @@ normalize: True
 # context
 context_type: temporal
 context_size: 2 # 5
-alpha: 0.5
+alpha: 0.01
 
 # distance bounds for distance and action and distance predictions 
 distance:
@@ -61,7 +66,7 @@ action:
   max_dist_cat: 25
 
 # action output params
-len_traj_pred: 20
+len_traj_pred: 16
 learn_angle: False
 
 # dataset specific parameters
@@ -83,10 +88,10 @@ datasets:
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: True # negative mining from the ViNG paper (Shah et al.)
     weight: 0.5
-  go_stanford_labelled:
+  go_stanford_cropped_labelled:
     data_folder: /home/cglossop/lcbc_datasets/go_stanford_cropped_labelled/
-    train: /home/cglossop/vlm-guidance/data/data_splits/go_stanford_labelled/train/ # path to train folder with traj_names.txt
-    test: /home/cglossop/vlm-guidance/data/data_splits/go_stanford_labelled/test/ # path to test folder with traj_names.txt
+    train: /home/cglossop/vlm-guidance/data/data_splits/go_stanford_cropped_labelled/train/ # path to train folder with traj_names.txt
+    test: /home/cglossop/vlm-guidance/data/data_splits/go_stanford_cropped_labelled/test/ # path to test folder with traj_names.txt
     end_slack: 0 # because many trajectories end in collisions
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: True # negative mining from the ViNG paper (Shah et al.)

@@ -78,7 +78,7 @@ frodo_dataset:
 cory_hall_labelled:
   metric_waypoint_spacing: 0.06
 
-go_stanford_labelled:
+go_stanford_cropped_labelled:
   metric_waypoint_spacing: 0.12
 
 scand_labelled:
