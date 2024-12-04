@@ -60,7 +60,6 @@ class NavigateLocal(Node):
         super().__init__('navigate_local')
         self.args = args
         self.context_queue = []
-        self.context_size = 5
         self.num_samples = args.num_samples
         
         self.language_prompt = args.prompt
@@ -74,6 +73,7 @@ class NavigateLocal(Node):
         print("Using device:", self.device)
         self.load_model_from_config(MODEL_CONFIG_PATH, args.model_type)
         self.language_encoder = self.model_params["language_encoder"]
+        self.context_size = self.model_params["context_size"]
 
         # self.clip_model, self.preprocess = clip.load(self.clip_model_type, device=self.device)
         # self.clip_language_embedding =  clip.tokenize(self.language_prompt).to(self.device)
