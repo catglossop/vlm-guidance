@@ -122,6 +122,7 @@ def main(config):
                         normalize=config["normalize"],
                         goal_type=config["goal_type"],
                         language_encoder=config["language_encoder"],
+                        uncond_prob=config["unconditional_prob"],
                     )
                     if data_split_type == "train":
                         if len(dataset) == 0:

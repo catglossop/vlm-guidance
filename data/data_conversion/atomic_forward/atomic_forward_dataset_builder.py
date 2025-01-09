@@ -11,7 +11,7 @@ from PIL import Image
 
 
 
-class LCBCDataset(tfds.core.GeneratorBasedBuilder):
+class AtomicDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
     VERSION = tfds.core.Version('1.0.0')
@@ -102,18 +102,14 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
                     'file_path': tfds.features.Text(
                         doc='Path to the original data file.'
                     ),
-                    'episode_id': tfds.features.Scalar(
-                        dtype=tf.int32,
-                        doc='Episode ID.'
-                    ),
                 }),
             }))
 
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/train'),
-            'val': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/val'),
+            'train': self._generate_examples(path='/hdd/LLLwL_datasets/atomic_dataset_sorted_go_forward/train'),
+            'val': self._generate_examples(path='/hdd/LLLwL_datasets/atomic_dataset_sorted_go_forward/val'),
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:
@@ -125,7 +121,6 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
                 if os.path.isdir(os.path.join(data_dir, f))
                 and "traj_data.pkl" in os.listdir(os.path.join(data_dir, f))
             ]   
-
             return folder_names
 
         def _yaw_rotmat(yaw: float) -> np.ndarray:
@@ -220,12 +215,10 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
             samples = []
             successes = []
             episode_paths = []
-            for j in range(len(data["language_annotations"])):
+            for language_instruction in [data["language_instruction"], data["varied_language_instruction"]]:
                 episode = []
                 for i in range(len(data['position'])):
                     # compute Kona language embedding
-                    language_instruction = data['language_annotations'][j]["traj_description"]
-                    # language_embedding = self._embed([language_instruction])[0].numpy()
                     language_embedding = np.zeros(512, dtype=np.float32)
 
                     #Get image observation
@@ -247,7 +240,6 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
                     action_angle = action_angle[0]
                     #action = actions[0]
                     #action = np.concatenate((action, [0, 0, 0, 0, 0]))
-
                     episode.append({
                         'observation': {
                             'image': img,
@@ -284,19 +276,19 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
             # if you want to skip an example for whatever reason, simply return None
             return episode_paths, samples, successes
 
-        dataset_names = os.listdir(path)
+        dataset_names = path.split("/")[-2]
         episode_paths = dict()
         for name in dataset_names:
-            episode_paths[name] = _get_folder_names(os.path.join(path, name))
+            episode_paths[name] = _get_folder_names(path)
 
         # print("START PARSING")
         # for smallish datasets, use single-thread parsing
         for name, paths in episode_paths.items():
             for sample in paths:
-                episode_paths, samples, successes = _parse_example(os.path.join(path, name, sample))
+                sample_path = os.path.join(path, sample)
+                episode_paths, samples, successes = _parse_example(sample_path)
                 for episode_path, sample, success in zip(episode_paths, samples, successes):
                     if success:
-                        sample['episode_metadata']['episode_id'] = id_iter
                         id_iter += 1
                         yield episode_path + str(id_iter), sample
 

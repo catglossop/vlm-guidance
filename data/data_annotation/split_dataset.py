@@ -2,61 +2,48 @@ import os
 import glob
 import sys
 import random
+import shutil
+from tqdm import tqdm
 
 TRAIN = 0.8
 VAL = 0.2
+RERUN = True
+output_dir = "/home/noam/LLLwL/datasets/atomic_dataset_sorted"
+dataset = "/home/noam/LLLwL/datasets/atomic_dataset_fixed/"
+atomic_names = ["turn_left", "turn_right", "go_forward", "stop"]
+if RERUN:
+    for atomic_name in atomic_names:
+        os.system(f"rm -r {output_dir}_{atomic_name}")
+        os.makedirs(f"{output_dir}_{atomic_name}/train")
+        os.makedirs(f"{output_dir}_{atomic_name}/val")
+else:
+    for atomic_name in atomic_names:
+        os.makedirs(f"{output_dir}_{atomic_name}/train")
+        os.makedirs(f"{output_dir}_{atomic_name}/val")
 
-dataset = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/"
-os.makedirs(dataset + "train", exist_ok=True)
-os.makedirs(dataset + "val", exist_ok=True)
+for atomic_name in atomic_names:
+    print(f"Processing {atomic_name}")
+    atomic_output_dir = output_dir + f"_{atomic_name}/"
+    all_paths = glob.glob(dataset + f"*/{atomic_name}/*", recursive=True)
+    random.shuffle(all_paths)
 
-train_paths = glob.glob(dataset + "*/train/*")
-val_paths = glob.glob(dataset + "*/val/*")
-
-
-# for path in train_paths:
-#     try:
-#         os.rename(path, dataset + "train/" + path.split("/")[-1])
-#     except Exception as e:
-#         print(e)
-#         print(path)
-#         continue
-for path in val_paths:
-    try:
-        os.rename(path, dataset + "val/" + path.split("/")[-1])
-    except Exception as e:
-        print(e)
-        print(path)
-        continue
-
-
-
+    train_paths = all_paths[:int(len(all_paths) * TRAIN)]
+    val_paths = all_paths[int(len(all_paths) * TRAIN):]
+    print(f"Train: {len(train_paths)}")
+    for path in tqdm(train_paths):
+        try:
+            shutil.copytree(path, atomic_output_dir + "train/" + path.split("/")[-1])
+        except Exception as e:
+            print(e)
+            print(path)
+            continue
+    print(f"Val: {len(val_paths)}")
+    for path in tqdm(val_paths):
+        try:
+            shutil.copytree(path, atomic_output_dir + "val/" + path.split("/")[-1])
+        except Exception as e:
+            print(e)
+            print
 
 
-# datasets = glob.glob("/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/*")
-
-# for dataset in datasets:
-
-#     dataset_paths = glob.glob(dataset + "/*")
-#     breakpoint()
-#     total_len = len(dataset_paths)
-#     train_len = int(total_len * TRAIN)
-#     val_len = int(total_len * VAL)
-    
-#     # shuffle paths
-#     random.shuffle(dataset_paths)
-#     train_paths = dataset_paths[:train_len]
-#     val_paths = dataset_paths[train_len:]
-
-#     # create train and val directories
-#     train_dir = dataset + "/train"
-#     val_dir = dataset + "/val"
-#     os.mkdir(train_dir)
-#     os.mkdir(val_dir)
-
-#     # move files to train and val directories
-#     for path in train_paths:
-#         os.rename(path, train_dir + "/" + path.split("/")[-1])
-#     for path in val_paths:
-#         os.rename(path, val_dir + "/" + path.split("/")[-1])
     

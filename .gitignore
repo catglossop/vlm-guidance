@@ -14,4 +14,4 @@ deployment/model_weights/
 debug/examples/
 data/data_analysis/examples/
 data/data_annotation/lcbc_datasets/
-
+debug/outputs

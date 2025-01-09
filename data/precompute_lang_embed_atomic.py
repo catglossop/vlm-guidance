@@ -16,7 +16,7 @@ REDO = True
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled"
-input_path = "/home/noam/LLLwL/datasets/atomic_dataset_fixed"
+input_path = "/home/noam/LLLwL/datasets/atomic_dataset_finer"
 lang_txt_paths = glob.glob(f"{input_path}/*/*/*/traj_data.pkl", recursive=True)
 if USE_CLIP:
     model_version = "ViT-B/32"

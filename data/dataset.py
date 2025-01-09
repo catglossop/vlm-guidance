@@ -41,6 +41,7 @@ class LCBCDataset(Dataset):
         obs_type: str = "image",
         goal_type: str = "image",
         language_encoder: str = "clip",
+        uncond_prob: float = 0.5,
     ):
         """
         Main ViNT dataset class
@@ -65,6 +66,8 @@ class LCBCDataset(Dataset):
         self.data_folder = data_folder
         self.data_split_folder = data_split_folder
         self.dataset_name = dataset_name
+        self.uncond_prob = uncond_prob
+        self.explore_embed = torch.tensor(np.load(os.path.join(self.data_split_folder, "../../../explore_embed.pkl"), allow_pickle=True)).squeeze()
         
         traj_names_file = os.path.join(data_split_folder, "traj_names.txt")
         with open(traj_names_file, "r") as f:
@@ -346,10 +349,17 @@ class LCBCDataset(Dataset):
             selected_lang = ""
             print(f"Trajectory {f_curr} does not have text features")
         else:
-            lang_embed = curr_traj_data["text_features"]
-            random_ind = np.random.randint(0, lang_embed.shape[0])
-            selected_lang_embed = lang_embed[random_ind, :]
-            selected_lang = curr_traj_data["language_annotations"][random_ind]["traj_description"]
+            if np.random.rand() < self.uncond_prob:
+                selected_lang_embed = self.explore_embed
+                selected_lang = "Explore"
+            else:
+                lang_embed = curr_traj_data["text_features"]
+                random_ind = np.random.randint(0, lang_embed.shape[0])
+                selected_lang_embed = lang_embed[random_ind, :]
+                try:
+                    selected_lang = curr_traj_data["language_annotations"][random_ind]["traj_description"]
+                except:
+                    selected_lang = [curr_traj_data["language_instruction"], curr_traj_data["varied_language_instruction"]][random_ind]
 
         # Compute actions
         actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time)

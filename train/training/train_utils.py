@@ -923,10 +923,6 @@ def train_lnp_multimodal(
                         obsgoal_cond[j,2] = 1
                     elif lang[j] == "Stop":
                         obsgoal_cond[j,3] = 1
-                # obsgoal_cond[lang == "Turn left"] = torch.tensor([1,0,0,0], device=device)
-                # obsgoal_cond[lang == "Turn right"] = torch.tensor([0,1,0,0], device=device)
-                # obsgoal_cond[lang == "Go forward"] = torch.tensor([0,0,1,0], device=device)
-                # obsgoal_cond[lang == "Stop"] = torch.tensor([0,0,0,1], device=device)
 
             deltas = get_delta(action_label)
             ndeltas = normalize_data(deltas, ACTION_STATS)
