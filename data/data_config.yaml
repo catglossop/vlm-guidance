@@ -84,6 +84,18 @@ go_stanford_cropped_labelled:
 scand_labelled:
   metric_waypoint_spacing: 0.38
 
+scand_cf:
+  metric_waypoint_spacing: 0.38
+
+sacson_cf:
+  metric_waypoint_spacing: 0.255
+
+cory_hall_cf:
+  metric_waypoint_spacing: 0.06
+
+go_stanford_cf:
+  metric_waypoint_spacing: 0.12
+
 # ATOMIC
 sacson_atomic_left: 
   metric_waypoint_spacing: 0.255

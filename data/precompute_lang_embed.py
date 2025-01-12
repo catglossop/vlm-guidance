@@ -6,6 +6,7 @@ from tqdm import tqdm
 import pickle as pkl
 import tensorflow_hub as hub
 import tensorflow_text
+import shutil
 from transformers import T5EncoderModel, T5Tokenizer
 import numpy as np
 
@@ -16,8 +17,9 @@ REDO = True
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled"
-input_path = "/home/cglossop/lcbc_datasets"
-lang_txt_paths = glob.glob(f"{input_path}/*/*/traj_data.pkl", recursive=True)
+input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset"
+lang_txt_paths = glob.glob(f"{input_path}/*/traj_data_filtered.pkl", recursive=True)
+
 if USE_CLIP:
     model_version = "ViT-B/32"
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -29,10 +31,26 @@ if USE_T5:
     model = T5EncoderModel.from_pretrained("google-t5/t5-small")
 
 for path in tqdm(lang_txt_paths): 
+    filtered_path = path.replace("traj_data.pkl", "traj_data_filtered.pkl")
 
-    with open(path, "rb") as old_file:
-        traj_data = pkl.load(old_file)
-    if "text_features" in traj_data.keys():
+    traj_data_filtered = None
+    if os.path.exists(filtered_path):
+        # Load filtered data
+        traj_data_filtered = pkl.load(open(filtered_path, "rb"))
+
+    traj_data = None
+    if "traj_data.pkl" in path:
+        with open(path, "rb") as old_file:
+            traj_data = pkl.load(old_file)
+
+    if traj_data_filtered is not None and traj_data is not None:
+        traj_data["language_annotations"] = traj_data_filtered["language_annotations"]
+    else:
+        traj_data = traj_data_filtered
+        path = filtered_path
+
+    if "text_features" in traj_data.keys() and not REDO:
+        print("already exists")
         continue
     try:
         lang_annotations = traj_data["language_annotations"]
@@ -54,9 +72,11 @@ for path in tqdm(lang_txt_paths):
         if len(lang_annotations) == 0:
             print(f"Path {path} has no lang annotations")
             continue
-        new_path = path.replace("traj_data.pkl", "traj_data_w_embed_t5.pkl")
+        new_path = path.replace("traj_data_filtered.pkl", "traj_data_w_embed_t5.pkl")
         if os.path.exists(new_path) and not REDO:
             continue
+        elif os.path.exists(new_path) and REDO:
+            shutil.copyfile(new_path, new_path.replace(".pkl", "_old.pkl"))
         text_features = []
         for lang in lang_annotations:
             lang = lang["traj_description"]
@@ -68,9 +88,9 @@ for path in tqdm(lang_txt_paths):
     with open(new_path, "wb") as new_file:
         pkl.dump(traj_data, new_file)
 
-all_paths = glob.glob(f"{input_path}/*", recursive=True)
+# all_paths = glob.glob(f"{input_path}/*/*", recursive=True)
 
-for path in tqdm(all_paths):
-    if not os.path.exists(os.path.join(path, "traj_data.pkl")):
-        print(f"Path {path} does not have traj_data.pkl")
-        breakpoint()
+# for path in tqdm(all_paths):
+#     if not os.path.exists(os.path.join(path, "traj_data.pkl")):
+#         print(f"Path {path} does not have traj_data.pkl")
+#         breakpoint()

@@ -259,8 +259,8 @@ class LNPMultiModal(nn.Module):
             self.compress_final_enc = nn.Linear(self.lang_encoding_size, self.goal_encoding_size)
         # self.compress_final_enc = nn.Linear(self.lang_encoding_size, self.goal_encoding_size)
         # Initialize positional encoding and self-attention layers
-        # self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=self.context_size+2) #no context
-        self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=7) #no context
+        self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=self.context_size+2) #no context
+        # self.positional_encoding = PositionalEncoding(self.goal_encoding_size, max_seq_len=7) #no context
         self.sa_layer = nn.TransformerEncoderLayer(
             d_model=self.goal_encoding_size, 
             nhead=mha_num_attention_heads, 
@@ -347,11 +347,11 @@ class LNPMultiModal(nn.Module):
         if self.use_transformer:
             B = feat_text.shape[0]
             lang_token = self.compress_final_enc(feat_text) if feat_text.shape[1] != self.goal_encoding_size else feat_text
-            lang_tokens = lang_token.unsqueeze(1).repeat(1, obs_encoding.shape[1], 1)
-            tokens = torch.stack((obs_encoding, lang_tokens), dim=2)
-            # lang_token = lang_token.unsqueeze(1)
-            # tokens = torch.cat((obs_encoding, lang_token), dim=1)
-            tokens = tokens.reshape(B, -1, self.goal_encoding_size)
+            # lang_tokens = lang_token.unsqueeze(1).repeat(1, obs_encoding.shape[1], 1)
+            # tokens = torch.stack((obs_encoding, lang_tokens), dim=2)
+            lang_token = lang_token.unsqueeze(1)
+            tokens = torch.cat((obs_encoding, lang_token), dim=1)
+            # tokens = tokens.reshape(B, -1, self.goal_encoding_size)
             # Apply positional encoding 
             if self.positional_encoding:
                 tokens = self.positional_encoding(tokens)
