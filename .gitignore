@@ -14,4 +14,5 @@ deployment/model_weights/
 debug/examples/
 data/data_analysis/examples/
 data/data_annotation/lcbc_datasets/
+deployment/launch/gold_standard_bags/
 
