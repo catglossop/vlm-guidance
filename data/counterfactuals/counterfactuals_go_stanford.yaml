@@ -1,0 +1,12 @@
+min_turn_thres: 1.05
+min_forward_thres: 0.8
+stop_thres: 0.5
+debug: False
+max_steps: 10
+base_instructions: ["Turn left", "Turn right", "Go forward", "Stop", "Adjust left", "Adjust right"]
+model_config: /home/noam/LLLwL/lcbc/config/atomic_finer.yaml
+model_path: /home/noam/LLLwL/lcbc/logs/lcbc/atomic_2024_12_09_19_53_43
+checkpoint: 30
+model_type: lnp_multi_modal
+min_num_cfs: 5000
+counterfactuals_output: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/go_stanford_cf
