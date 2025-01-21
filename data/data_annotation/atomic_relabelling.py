@@ -17,8 +17,8 @@ MIN_TURN_THRESHOLD = 1.05 # 60 degrees
 MIN_FORWARD_THRESHOLD = 0.8
 STOP_THRESHOLD = 0.5
 USE_CENTERPOINT = True
-OUTPUT_PATH = "/home/noam/LLLwL/datasets/atomic_dataset_fixed"
-base_instructions = ["Turn left", "Turn right", "Go forward", "Stop"]
+OUTPUT_PATH = "/home/noam/LLLwL/datasets/atomic_dataset_finer"
+base_instructions = ["Turn left", "Turn right", "Go forward", "Stop", "Adjust left", "Adjust right"]
 varied_forward = [
     "Move forward",
     "Go straight",
@@ -38,6 +38,28 @@ varied_forward = [
     "Move ahead",
     "Continue on your path",
     "Sustain your direction"
+]
+varied_mid_right = [
+    "Adjust slightly to the right.",
+    "Veer gently to the right.",
+    "Shift your heading slightly rightward.",
+    "Angle a little to the right.",
+    "Drift slightly right.",
+    "Make a minor adjustment to the right.",
+    "Pivot gently toward the right.",
+    "Lean slightly to the right.",
+    "Move subtly toward the right.",
+    "Curve gently to the right.",
+    "Nudge a bit to the right.",
+    "Adjust your course slightly rightward.",
+    "Ease a little to the right.",
+    "Tilt slightly toward the right.",
+    "Align a fraction to the right.",
+    "Shift course marginally right.",
+    "Reorient gently to the right.",
+    "Steer just a touch to the right.",
+    "Guide your path slightly right.",
+    "Correct course lightly to the right."
 ]
 varied_right = [
     "Make a right turn",
@@ -61,6 +83,28 @@ varied_right = [
     "Aim right",
     "Adjust your path to the right"
 ]
+varied_mid_left = [
+    "Adjust slightly to the left.",
+    "Veer gently to the left.",
+    "Shift your heading slightly leftward.",
+    "Angle a little to the left.",
+    "Drift slightly left.",
+    "Make a minor adjustment to the left.",
+    "Pivot gently toward the left.",
+    "Lean slightly to the left.",
+    "Move subtly toward the left.",
+    "Curve gently to the left.",
+    "Nudge a bit to the left.",
+    "Adjust your course slightly leftward.",
+    "Ease a little to the left.",
+    "Tilt slightly toward the left.",
+    "Align a fraction to the left.",
+    "Shift course marginally left.",
+    "Reorient gently to the left.",
+    "Steer just a touch to the left.",
+    "Guide your path slightly left.",
+    "Correct course lightly to the left."
+]
 varied_left = [
     "Make a left turn",
     "Veer to the left",
@@ -71,17 +115,14 @@ varied_left = [
     "Swing to the left",
     "Proceed to the left",
     "Angle left",
-    "Shift left",
     "Rotate left",
     "Pivot to the left",
     "Steer left",
     "Divert to the left",
     "Bank left",
-    "Curve left",
-    "Move to the left side",
+    "Move to the left"
     "Navigate left",
     "Aim left",
-    "Adjust your path to the left"
 ]
 
 varied_stop = [
@@ -170,6 +211,20 @@ def get_language_instructions(path):
                 print(f"Yaw: {yaw[i:i+curr_traj_len+1]}")
             language_instruction = base_instructions[3]
             varied_language_instruction = random.choice(varied_stop)
+        elif get_yaw_delta(yaw[i], yaw[i+curr_traj_len]) < MIN_TURN_THRESHOLD and get_yaw_delta(yaw[i], yaw[i+curr_traj_len]) > MIN_FORWARD_THRESHOLD:
+            if DEBUG:
+                print("Result is adjust left")
+                print(f"Yaw delta: {get_yaw_delta(yaw[i], yaw[i+curr_traj_len])}")
+                print(f"Yaw: {yaw[i:i+curr_traj_len+1]}")
+            language_instruction = base_instructions[4]
+            varied_language_instruction = random.choice(varied_mid_left)
+        elif get_yaw_delta(yaw[i], yaw[i+curr_traj_len]) > -MIN_TURN_THRESHOLD and get_yaw_delta(yaw[i], yaw[i+curr_traj_len]) < -MIN_FORWARD_THRESHOLD:
+            if DEBUG:
+                print("Result is adjust right")
+                print(f"Yaw delta: {get_yaw_delta(yaw[i], yaw[i+curr_traj_len])}")
+                print(f"Yaw: {yaw[i:i+curr_traj_len+1]}")
+            language_instruction = base_instructions[5]
+            varied_language_instruction = random.choice(varied_mid_right)
         else:
             i += curr_traj_len
             continue

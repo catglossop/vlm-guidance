@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import tqdm
 import io
 import lmdb
+import glob
 
 import torch
 from torch.utils.data import Dataset
@@ -41,6 +42,7 @@ class LCBCDataset(Dataset):
         obs_type: str = "image",
         goal_type: str = "image",
         language_encoder: str = "clip",
+        uncond_prob: float = 0.5,
     ):
         """
         Main ViNT dataset class
@@ -65,6 +67,8 @@ class LCBCDataset(Dataset):
         self.data_folder = data_folder
         self.data_split_folder = data_split_folder
         self.dataset_name = dataset_name
+        self.uncond_prob = uncond_prob
+        self.explore_embed = torch.tensor(np.load(os.path.join(self.data_split_folder, "../../../explore_embed.pkl"), allow_pickle=True)).squeeze()
         
         traj_names_file = os.path.join(data_split_folder, "traj_names.txt")
         with open(traj_names_file, "r") as f:
@@ -161,8 +165,9 @@ class LCBCDataset(Dataset):
                 with image_cache.begin(write=True) as txn:
                     for traj_name, time in tqdm_iterator:
                         image_path = get_data_path(self.data_folder, traj_name, time)
-                        with open(image_path, "rb") as f:
-                            txn.put(image_path.encode(), f.read())
+                        if os.path.exists(image_path):
+                            with open(image_path, "rb") as f:
+                                txn.put(image_path.encode(), f.read())
 
         # Reopen the cache file in read-only mode
         self._image_cache: lmdb.Environment = lmdb.open(cache_filename, readonly=True)
@@ -177,7 +182,7 @@ class LCBCDataset(Dataset):
         for traj_name in tqdm.tqdm(self.traj_names, disable=not use_tqdm, dynamic_ncols=True):
             traj_data = self._get_trajectory(traj_name)
             traj_len = len(traj_data["position"])
-            for goal_time in range(0, traj_len):                                                                                                                                                                                                                                                                                                                                                                               
+            for goal_time in range(0, traj_len):                                                                                                                                                                                                                                                                                                                                                             
                 goals_index.append((traj_name, goal_time))
 
             begin_time = self.context_size * self.waypoint_spacing
@@ -246,6 +251,9 @@ class LCBCDataset(Dataset):
         positions = traj_data["position"][start_index:end_index:self.waypoint_spacing]
         goal_pos = traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)]
 
+        if type(yaw) == list:
+            yaw = np.array(yaw)
+
         if len(yaw.shape) == 2:
             yaw = yaw.squeeze(1)
 
@@ -253,7 +261,8 @@ class LCBCDataset(Dataset):
             const_len = self.len_traj_pred + 1 - yaw.shape[0]
             yaw = np.concatenate([yaw, np.repeat(yaw[-1], const_len)])
             positions = np.concatenate([positions, np.repeat(positions[-1][None], const_len, axis=0)], axis=0)
-
+        yaw = yaw[:self.len_traj_pred + 1]
+        positions = positions[:self.len_traj_pred + 1, :]
         assert yaw.shape == (self.len_traj_pred + 1,), f"{yaw.shape} and {(self.len_traj_pred + 1,)} should be equal"
         assert positions.shape == (self.len_traj_pred + 1, 2), f"{positions.shape} and {(self.len_traj_pred + 1, 2)} should be equal"
 
@@ -324,11 +333,22 @@ class LCBCDataset(Dataset):
             context = [(f_curr, t) for t in context_times]
         else:
             raise ValueError(f"Invalid context type {self.context_type}")
-        obs_image = torch.cat([
-            self._load_image(f, t) for f, t in context
-        ])
+
+        try:
+            obs_image = torch.cat([
+                self._load_image(f, t) for f, t in context
+            ])
+        except:
+            print(context)
+            breakpoint()
         # Load goal image
-        goal_image = self._load_image(f_goal, goal_time)
+        # try:
+        #     image_path = get_data_path(self.data_folder, f_goal, goal_time)
+        #     with self._image_cache.begin() as txn:
+        #         image_buffer = txn.get(image_path.encode())
+        #     goal_image = self._load_image(f_goal, goal_time)
+        # except:
+        goal_image = np.zeros((3, self.image_size[0], self.image_size[1]), dtype=np.float32)
 
 
         # Load other trajectory data
@@ -346,10 +366,17 @@ class LCBCDataset(Dataset):
             selected_lang = ""
             print(f"Trajectory {f_curr} does not have text features")
         else:
-            lang_embed = curr_traj_data["text_features"]
-            # random_ind = np.random.randint(0, lang_embed.shape[0])
-            selected_lang_embed = lang_embed[0, :]
-            selected_lang = curr_traj_data["language_instruction"]
+            if np.random.rand() < self.uncond_prob:
+                selected_lang_embed = self.explore_embed
+                selected_lang = "Explore"
+            else:
+                lang_embed = curr_traj_data["text_features"]
+                random_ind = np.random.randint(0, lang_embed.shape[0])
+                selected_lang_embed = lang_embed[random_ind, :]
+                try:
+                    selected_lang = curr_traj_data["language_annotations"][random_ind]["traj_description"]
+                except:
+                    selected_lang = [curr_traj_data["language_instruction"], curr_traj_data["varied_language_instruction"]][random_ind]
 
         # Compute actions
         actions, goal_pos = self._compute_actions(curr_traj_data, curr_time, goal_time)
@@ -372,7 +399,7 @@ class LCBCDataset(Dataset):
         )
         return (
             torch.as_tensor(obs_image, dtype=torch.float32),
-            torch.as_tensor(goal_image, dtype=torch.float32),\
+            torch.as_tensor(goal_image, dtype=torch.float32),
             actions_torch,
             torch.as_tensor(selected_lang_embed, dtype=torch.float32),
             selected_lang,

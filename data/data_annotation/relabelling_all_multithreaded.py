@@ -15,9 +15,10 @@ import shutil
 import pickle as pkl
 import json
 from tqdm import tqdm 
-import cv2
+import cv2 as cv
 from multiprocessing import Pool, Lock
 from tqdm_multiprocess import TqdmMultiProcessPool
+import subprocess
 
 # OPTIONAL (FOR VISUALIZATION ONLY)
 CAMERA_METRICS = {"camera_height" : 0.95, # meters
@@ -296,21 +297,111 @@ def relabel_traj_gpt_hierarchical(images_64, prompt, client, in_context_images_6
     label = response.choices[0].message.content
     return label, context_no_images
 
-def relabel_traj_gemini(images, prompt, client, in_context_images=None, in_context_text=None):
-    context = []
-    if in_context_images:
-        context = [in_context_text]
-        for img in in_context_images:
-            context.append(img)
-    context.append(prompt)
-    for img in images:
-        context.append(img)
-    response = client.generate_content(context)
-    label = response.text
-    return label, context
+def relabel_traj_gemini(path, images, prompt, client, config, in_context_images=None, in_context_text=None):
+    message_history = []
+    context_no_images = []
+    use_video = config["use_video"]
 
-def relabel_traj_prismatic(images, prompt, client, in_context_images=None, in_context_text=None):
-    pass
+    if use_video: 
+        video_file = images
+    for i, p in enumerate(prompt.keys()):
+        context = []
+        if i == 0:
+            if use_video:
+                context = [video_file, prompt[p]]
+            else:
+                for image in images:
+                    context.append(image)
+                    context_no_images.append(prompt[p])
+                context.append(prompt[p])
+        response = client.generate_content(context)
+        context_no_images.append(response.text)
+    label = response.text
+    return label, context_no_images
+
+def relabel_traj_gemini_hierarchical(images, prompt, client, in_context_images=None, in_context_text=None):
+    message_history = []
+    context_no_images = [] 
+    image_descriptions = []
+    contents = []
+    for i, p in enumerate(prompt.keys()):
+        context = []
+        if i == 0:
+            context_no_images.append(prompt[p])
+            contents.append({
+                                "role": "user",
+                                "parts": [
+                                    {
+                                        "text": prompt[p]
+                                    }
+                                ]
+                            },)
+            response = client.generate_content(prompt[p])
+            context_no_images.append(response.text)
+            contents.append({
+                                "role": "model",
+                                "parts": [
+                                    {
+                                        "text": response.text
+                                    }
+                                ]
+            })
+        elif i == 1: 
+            for j, image in enumerate(images):
+                image_context = []
+                image_context.append(prompt[p])
+                image_context.append(image)
+
+                contents.append({"role": "user",
+                                "parts": [
+                                    {
+                                        "text": prompt[p],
+                                    },
+                                    {
+                                        "inline_data" : {
+                                            "mime_type" : "image/jpeg",
+                                            "data": image
+                                        }
+                                    }
+                                ]
+                    })
+                response = client.generate_content(contents)
+                image_descriptions.append(response.text)
+                contents.append({
+                                "role": "model",
+                                "parts": [
+                                    {
+                                        "text": response.text
+                                    }
+                                ]
+                })
+        elif i == 2:
+            str_image_descriptions = "[" + "', '".join(image_descriptions) + "]"
+            contents.append({
+                                "role": "user",
+                                "parts": [
+                                    {
+                                        "text": prompt[p] + str_image_descriptions
+                                    }
+                                ]
+                            },)
+            response = client.generate_content(contents)
+            context_no_images.append(response.text)
+            contents.append({
+                                "role": "model",
+                                "parts": [
+                                    {
+                                        "text": response.text
+                                    }
+                                ]
+            })
+    label = response.text
+    return label, context_no_images
+            
+
+
+
+
 
 def add_annotation(img, idx):
     fig, ax = plt.subplots()
@@ -327,10 +418,11 @@ def add_annotation(img, idx):
     plt.imshow(out_img)
     plt.show()
     return out_img
+
 # Main function
-def main(args):
+def main(config):
     # Get model
-    model = args.model
+    model = config["model"]
     if model == "gpt":
         OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
         ORGANIZATION_ID = os.environ.get("ORGANIZATION_ID")
@@ -342,42 +434,43 @@ def main(args):
         raise NotImplementedError("Prismatic is not yet supported")
     else: 
         raise ValueError("Invalid model name")
-    print(f"Using model: {model} with name: {args.model_name}")
+    print(f"Using model: {model} with name: {config['model_name']}")
 
     # Get config
-    period = args.period
-    annotation_type = args.annotation_type
-    dataset = args.dataset
+    period = config["period"]
+    annotation_type = config["annotation_type"]
+    dataset = config["dataset"]
     print(f"Using dataset: {dataset}")
-    output = args.output
-    if args.debug: 
+    output = config["output"]
+    if config["debug"]: 
         output = output + "_debug"
-    if args.overwrite:
+    if config["overwrite"]:
         shutil.rmtree(output)
         os.makedirs(output)
     else:
         os.makedirs(output, exist_ok=True)
     print(f"Outputting dataset to: {output}")
-    prompt = json.load(open(args.prompt, "r"))
-
+    print(f"Using prompt: {config['prompt']}")
     # Check if using in-context examples, if so load them (for now, just one in-context example)
+    # in_context_images = None
+    # in_context_text = None
+    # in_context_images_base64 = None
+    # if config.in_context:
+    #     print(f"Using in context: {config.in_context}")
+    #     with open(config.in_context, "r") as in_context:
+    #         try: 
+    #             in_context_example = yaml.safe_load(config.in_context, "r")
+    #         except:
+    #             raise ValueError("Invalid in context file")
+    #     in_context_images = [Image.open(in_context_example["path"][i]) for i in range(len(in_context_example["path"]))]
+    #     in_context_text = in_context_example["text"]
+        
+    #     if model == "gpt":
+    #         # convert images to base64
+    #         in_context_images_base64 = [pil_to_base64(img) for img in in_context_images]
     in_context_images = None
     in_context_text = None
     in_context_images_base64 = None
-    if args.in_context:
-        print(f"Using in context: {args.in_context}")
-        with open(args.in_context, "r") as in_context:
-            try: 
-                in_context_example = yaml.safe_load(args.in_context, "r")
-            except:
-                raise ValueError("Invalid in context file")
-        in_context_images = [Image.open(in_context_example["path"][i]) for i in range(len(in_context_example["path"]))]
-        in_context_text = in_context_example["text"]
-        
-        if model == "gpt":
-            # convert images to base64
-            in_context_images_base64 = [pil_to_base64(img) for img in in_context_images]
-
     # Get paths 
     # select subset of paths based on location 
     if dataset.split("/")[-1] == "sacson":
@@ -395,116 +488,108 @@ def main(args):
         paths = glob.glob(dataset + "/*")
     else:
         paths = glob.glob(dataset + "/*")
+    
+    # check if dir
+    paths = [p for p in paths if os.path.isdir(p)]
 
     print(f"Number of paths: {len(paths)}")
 
-    if args.debug: 
+    if config["debug"]: 
         paths = random.choices(paths, k=10)
-    current_state = None
-    starting_from_save = False
-    completed_paths = os.listdir(output)
-    completed_paths = [p.split("_chunk_")[0] for p in completed_paths if "chunk" in p]
-    completed_set = set(completed_paths)
-    path_keys = [p.split("/")[-1] for p in paths]
-    path_keys = set(path_keys)
-    remaining_path_idxs = [i for i, p in enumerate(paths) if p.split("/")[-1] not in completed_set]
-    paths = [paths[i] for i in remaining_path_idxs]
-    paths.remove(os.path.join(dataset,"pos_data.pkl"))
-    print("Number of paths remaining: ", len(paths))
-    if os.path.exists(os.path.join(output, "current_state/current_state.pkl")) and TRANSITION_TO_MUTLIPROCESS:
-        print("Resuming from save")
-        current_state = np.load(os.path.join(output, "current_state/current_state.pkl"), allow_pickle=True)
-        starting_from_save = True
-        completed_paths = os.listdir(output)
-        completed_paths = [p.split("_chunk_")[0] for p in completed_paths if "chunk" in p]
-        completed_set = set(completed_paths)
-        path_keys = [p.split("/")[-1] for p in paths]
-        path_keys = set(path_keys)
-        remaining_path_idxs = [i for i, p in enumerate(paths) if p.split("/")[-1] not in completed_set]
-        paths = [paths[i] for i in remaining_path_idxs]
-        print("Number of paths remaining: ", len(paths))
-        traj_list = os.listdir(output) 
-        traj_list.remove("current_state")
-        print("Current state: ", current_state)
 
     # Process each path
-    path_shards = np.array_split(paths, args.num_processes)
+    if config["num_processes"] == 1:
+        for i, path in enumerate(paths):
+            label_trajectories(i, [path], config)
+    
+    else:
+        path_shards = np.array_split(paths, config["num_processes"])
+        tasks = [(label_trajectories, (i, path_shards[i], config)) for i in range(config["num_processes"])]
+        pool = TqdmMultiProcessPool(config["num_processes"])
+        print("Starting multiprocessing")
+        with tqdm(total=len(tasks), 
+                dynamic_ncols=True,
+                position=0,
+                desc="Total progress"
+        ) as pbar:
+            pool.map(pbar, tasks, lambda _: None, lambda _: None)
 
-    tasks = [(label_trajectories, (i, path_shards[i], output, annotation_type, model, prompt, in_context_images, in_context_images_base64, in_context_text, period, args, current_state, starting_from_save)) for i in range(args.num_processes)]
-    pool = TqdmMultiProcessPool(args.num_processes)
-    print("Starting multiprocessing")
-    with tqdm(total=len(tasks), 
-              dynamic_ncols=True,
-              position=0,
-              desc="Total progress"
-    ) as pbar:
-        pool.map(pbar, tasks, lambda _: None, lambda _: None)
+def label_trajectories(thread_num, paths, config, tqdm_func=None, global_tqdm=None):
+    # Get values from config
+    annotation_type = config["annotation_type"]
+    output = config["output"]
+    prompt = config["prompt"]
+    model_name = config["model_name"]
+    model = config["model"]
+    period = config["period"]
 
-def label_trajectories(thread_num, paths, output, annotation_type, model, prompt, in_context_images, in_context_images_base64, in_context_text, period, args, current_state=None, starting_from_save=False, tqdm_func=None, global_tqdm=None):
+    # Load prompt
+    prompt = json.load(open(config["prompt"], "r"))
+
     if model == "gpt":
         OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
         ORGANIZATION_ID = os.environ.get("ORGANIZATION_ID")
         client = OpenAI(api_key=OPENAI_KEY,organization = ORGANIZATION_ID)
     elif model == "gemini":
         genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
-        client = genai.GenerativeModel(model_name="gemini-1.5-flash")
+        client = genai.GenerativeModel(model_name=model_name)
     elif model == "prismatic":
         raise NotImplementedError("Prismatic is not yet supported")
     else: 
         raise ValueError("Invalid model name")
-    print(f"In thread {thread_num}")
-    # if os.path.exists(os.path.join(output, f"current_state/current_state_{thread_num}.pkl")):
-    #     print("Resuming from save")
-    #     current_state = np.load(os.path.join(output, f"current_state/current_state_{thread_num}.pkl"), allow_pickle=True)
-    #     starting_from_save = True
-    #     paths = paths[paths.index(current_state["trajectory"]):]
-    #     print("Number of paths remaining: ", len(paths))
-    #     traj_list = os.listdir(output) 
-    #     traj_list.remove("current_state")
-    #     print("Current state: ", current_state)
 
-    traj_lens = np.arange(args.min_traj_len, args.max_traj_len)
+    print(f"In thread {thread_num}")
+
+    # If using video, set period to 1
+    if config["use_video"]:
+        period = 1
+
+    traj_lens = np.arange(config["min_traj_len"], config["max_traj_len"]+1)
     for path in paths:
-        chunk_idx = 0
-        # print(f"Processing path: {path}")
+        print(f"Processing path: {path}")
+        # Check if state in input path 
+        if os.path.exists(os.path.join(path, "state.pkl")):
+            with open(os.path.join(path, "state.pkl"), "rb") as f:
+                current_state = pkl.load(f)
+            start = current_state["start"]
+            chunk_idx = current_state["chunk_idx"]
+        else:
+            start = 0
+            chunk_idx = 0
+        
         total_traj_len = len(glob.glob(path + "/*.jpg"))
         with open(path + "/traj_data.pkl", "rb") as f:
             traj_data = pkl.load(f) 
-        if current_state is not None and starting_from_save:
-            i = current_state["start"]
-        else:
-            i = 0
         if len(traj_data["yaw"]) < 2:
             continue
+
+        i = start
         while i < total_traj_len:
             traj_len = np.random.choice(traj_lens)
+
             # Get traj range
-            if current_state is not None and starting_from_save:
-                start = current_state["start"]
-                end = current_state["end"]
-                starting_from_save = False
-                traj_len = end - start
-            else:
-                start = i
-                end = min(i + traj_len, total_traj_len)
-                traj_len = end - start
-            # print(f"Trajectory length {traj_len} starting at {start} ending at {end} in trajectory of length {total_traj_len}")
+            start = i
+            end = min(i + traj_len, total_traj_len)
+
+            print(f"Processing chunk {chunk_idx} with start {start} and end {end} of length {end - start}")
+
+            traj_output_dir = os.path.join(output, f"{path.split('/')[-1]}_chunk_{chunk_idx}_start_{start}_end_{end}")
 
             # Get curr traj data
             curr_traj_data = {}
             for key in traj_data.keys():
                 curr_traj_data[key] = traj_data[key][start:end]
             
-            if args.use_actions: 
+            if config["use_actions"]: 
                 actions = np.hstack((curr_traj_data["position"], curr_traj_data["yaw"].reshape(-1, 1)))
                 actions = actions - actions[0, :]
             
             # Get and annotate images
             if annotation_type == "drawn":
                 imgs = draw_trajectory(path, start, end)
-            elif annotation_type == "sampled":
+            elif annotation_type == "sampled" and not config["use_video"]:
                 imgs = [Image.open(path + f"/{k}.jpg") for k in range(start, end, period)]
-                if args.annotate:
+                if config["annotate"]:
                     temp_imgs = imgs
                     imgs = []
                     for j, img in enumerate(temp_imgs):
@@ -513,45 +598,81 @@ def label_trajectories(thread_num, paths, output, annotation_type, model, prompt
                 if model == "prismatic":
                     raise ValueError("Prismatic cannot accept a sampled trajectory")
             else:
-                raise ValueError("Invalid annotation type")
-            
+                img_files = [os.path.join(path, f"{k}.jpg") for k in range(start, end)]
+                frame = cv.imread(os.path.join(img_files[0]))
+                height, width, layers = frame.shape
+                fourcc = cv.VideoWriter_fourcc(*'mp4v')
+                video_name = f"{path}/output.avi"
+                video = cv.VideoWriter(video_name, fourcc, 1, (width, height))
+                for img in img_files:
+                    cv_img = cv.imread(img)
+                    video.write(cv_img)
+
+                cv.destroyAllWindows()
+                video.release()
+
+                imgs = genai.upload_file(path=f"{path}/output.avi")
+
             # Convert images to base64 if using GPT-4
-            if model == "gpt" and imgs is not None:
+            if model == "gpt" or (model == "gemini" and "hierarchical" in config["prompt"]) and imgs is not None:
                 imgs_base64 = [pil_to_base64(img) for img in imgs]
-            
-            # Relabel the trajectory
-            current_state = {"trajectory": path, "start": start, "end": end}
-            with lock:
-                with open(os.path.join(output, f"current_state_{thread_num}.pkl"), "wb") as f:
-                    pkl.dump(current_state, f)
 
             label = None
             context = None
             if model == "gpt":
-                if args.prompt == "prompt_hierarchical.json" or args.prompt == "prompt_hierarchical_templated.json":
+                if config["prompt"] == "prompt_hierarchical.json" or config["prompt"] == "prompt_hierarchical_templated.json":
                     max_tries = 2
                     tries = 0
                     instruction_json = None
                     while tries < max_tries:
                         try:
-                            label, context = relabel_traj_gpt_hierarchical(imgs_base64, prompt, client, in_context_images_base64, in_context_text, args.model_name, actions=None, debug = args.debug)
+                            label, context = relabel_traj_gpt_hierarchical(imgs_base64, prompt, client, config)
                             instruction_json = json.loads(label.lstrip("```json").rstrip("```").strip("\n").strip(" "))
                             break
                         except:
-                            # print(f"Try {tries} of {max_tries}. Retrying...")
+                            print(f"Try {tries+1} of {max_tries}. Retrying...")
                             tries += 1
                             continue
                     assert instruction_json is not None, "Failed to get instruction json"
                 else:
                     if imgs is not None: 
-                        if args.use_actions:
-                            label, context = relabel_traj_gpt(imgs_base64, prompt, client, in_context_images_base64, in_context_text, args.model_name, actions=actions)
+                        if config["use_actions"]:
+                            label, context = relabel_traj_gpt(imgs_base64, prompt, client, in_context_images_base64, in_context_text, config["model_name"], actions=actions)
                         else:
-                            label, context = relabel_traj_gpt(imgs_base64, prompt, client, in_context_images_base64, in_context_text, args.model_name, actions=None)
+                            label, context = relabel_traj_gpt(imgs_base64, prompt, client, in_context_images_base64, in_context_text, config["model_name"], actions=None)
                 
             elif model == "gemini":
-                label, context = relabel_traj_gemini(imgs, prompt, client, in_context_images, in_context_text)
-
+                if "hierarchical" in config["prompt"]:
+                    max_tries = 2
+                    tries = 0
+                    instruction_json = None
+                    while tries < max_tries:
+                        try:
+                            label, context = relabel_traj_gemini_hierarchical(imgs_base64, prompt, client, config)
+                            print(label)
+                            instruction_json = json.loads(label.lstrip("```json").rstrip("\n").rstrip("```").strip("\n"))
+                            breakpoint()
+                            break
+                        except:
+                            tries += 1
+                            continue
+                    assert instruction_json is not None, "Failed to get instruction json"
+                else:
+                    max_tries = 2
+                    tries = 0
+                    instruction_json = None
+                    while tries < max_tries:
+                        try:
+                            label, context = relabel_traj_gemini(path, imgs, prompt, client, config)
+                            label_stripped = label.lstrip("```json").rstrip("```").strip("\n").strip(" ")
+                            instruction_json = [json.loads(l) for l in label_stripped]
+                            instruction_json = {"instructions": instruction_json}
+                            break
+                        except:
+                            print(f"Try {tries} of {max_tries}. Retrying...")
+                            tries += 1
+                            continue
+                    assert instruction_json is not None, "Failed to get instruction json"
             elif model == "prismatic":
                 raise NotImplementedError("Prismatic is not yet supported")
             else:
@@ -578,7 +699,7 @@ def label_trajectories(thread_num, paths, output, annotation_type, model, prompt
                 f.write(label)
             
             # If viz, visualize the trajectory and save the context
-            if args.viz and imgs is not None:
+            if config["viz"] and imgs is not None:
                 print("Visualizing trajectory")
                 if annotation_type == "sampled": 
                     imgs[0].save(os.path.join(traj_output_dir, f"traj_viz_{chunk_idx}.gif"), save_all=True, append_images=imgs[1:], duration=500, loop=0)
@@ -587,39 +708,50 @@ def label_trajectories(thread_num, paths, output, annotation_type, model, prompt
                 with open(os.path.join(traj_output_dir, "context.txt"), "w") as f:
                     for c in context:
                         f.write(f"{c}\n")
+            
             chunk_idx += 1
             i += traj_len
 
+            # Update state
+            current_state = {"start": start, "chunk_idx": chunk_idx}
+            with open(os.path.join(path, "state.pkl"), "wb") as f:
+                pkl.dump(current_state, f)
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="gpt", help="gpt, gemini, prismatic, all")
-    parser.add_argument("--model_name", type=str, default="gpt-4o", help="Name of specific model or path to model")
-    parser.add_argument("--dataset", type=str, default="/home/noam/LLLwL/datasets/gnm_dataset/sacson", help="Path to dataset")
-    parser.add_argument("--min_traj_len", type=int, default=15, help="Length of trajectory")
-    parser.add_argument("--max_traj_len", type=int, default=25, help="Length of trajectory")
-    parser.add_argument("--period", type=int, default=3, help="Period of trajectory (sampling rate)")
-    parser.add_argument("--prompt", type=str, default="/home/noam/LLLwL/gemini/prompt.json", help="Path to prompt json file")
-    parser.add_argument("--in_context", type=str, default=None, help="Path to in context yaml file with image paths and text")
-    parser.add_argument("--output", type=str, default="go_stanford_cropped_labelled", help="Path to output directory")
-    parser.add_argument("--annotation_type", type=str, default="sampled", help="Either drawn trajectory of sampled trajectory (choices: 'drawn', 'sampled')")
-    parser.add_argument("--viz", action="store_true", help="Visualize the trajectory")
-    parser.add_argument("--overwrite", action="store_true", help="Overwrite the output directory")
-    parser.add_argument("--use_actions", action="store_true", help="Use actions to generate the trajectory")
-    parser.add_argument("--annotate", action="store_true", help="Annotate the images with frame number")
-    parser.add_argument("--debug", action="store_true", help="Debug mode")
-    parser.add_argument("--num_processes", type=int, default=4, help="Number of processes")
-    
+    parser.add_argument("--config", '-c', type=str, default="default.yaml", help="config for relabelling run")
     args = parser.parse_args()
-    args.overwrite = False
+
+    if os.path.exists(args.config):
+        with open(args.config, "r") as f:
+            config = yaml.safe_load(f)
+    else:
+        raise ValueError("Invalid config file")
+
+    if config["overwrite"]:
+        # Remove the output directory 
+        shutil.rmtree(config["output"])
+        os.makedirs(config["output"])
+
+        # Remove the state.pkl files
+        state_paths = glob.glob(config["dataset"] + "/*/state.pkl", recursive=True)
+        for state_path in state_paths:
+            print(f"Removing state file: {state_path}")
+            os.remove(state_path)
+
+
     failure_count = 0
     print("Running until complete!")
     while True:
         try:
-            main(args)
+            try:
+                main(config)
+                break
+            except Exception as e:
+                print("Function errored out!", e)
+                print(f"Function failed {failure_count} times")
+                print("Retrying ... ")
+                failure_count += 1
+        except KeyboardInterrupt:
             break
-        except Exception as e:
-            print("Function errored out!", e)
-            print(f"Function failed {failure_count} times")
-            print("Retrying ... ")
-            failure_count += 1
     print(f"Function completed successfully with {failure_count} failures")

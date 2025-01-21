@@ -1,0 +1,17 @@
+model: gemini
+model_name: gemini-1.5-flash
+dataset: /hdd/LLLwL_datasets/gnm_dataset/sacson
+min_traj_len: 15
+max_traj_len: 25
+period: 3 
+prompt: prompt_gemini_images.json
+in_context: None
+output: /hdd/gemini_labelled/sacson
+annotation_type: sampled
+viz: False
+overwrite: False
+use_actions: False
+annotate: False
+debug: False
+num_processes: 1
+use_video: False

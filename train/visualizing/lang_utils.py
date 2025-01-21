@@ -44,6 +44,7 @@ def visualize_lang_pred(
     )
     if not os.path.isdir(visualize_path):
         os.makedirs(visualize_path)
+
     assert (
         len(batch_obs_images)
         == len(batch_goal_images)

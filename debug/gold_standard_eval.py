@@ -13,6 +13,7 @@ import tensorflow_hub as hub
 import tensorflow_text
 from transformers import T5EncoderModel, T5Tokenizer
 import torch
+import pickle as pkl
 from torchvision import transforms
 import torchvision.transforms.functional as TF
 import model
@@ -45,7 +46,7 @@ from copy import copy
 IMAGE_SIZE = (96, 96)
 
 # load data_config.yaml
-with open(os.path.join(os.path.dirname(__file__), "../data/data_config.yaml"), "r") as f:
+with open(os.path.join("/home/noam/LLLwL/lcbc/data/data_config.yaml"), "r") as f:
     data_config = yaml.safe_load(f)
 
 def transform_images(pil_imgs: List[Image.Image], image_size: List[int], center_crop: bool = False) -> torch.Tensor:
@@ -80,46 +81,66 @@ def t5_embed(text, device):
     text_features = model(tokens["input_ids"], attention_mask=tokens["attention_mask"]).last_hidden_state.mean(dim=1)
     return text_features
 
-def compare_output(traj_1, traj_2, viz_img, prompt_1, prompt_2, viz_context, model_name):
+def compare_output(traj_1, traj_2, gt_trajs, viz_imgs, prompt_1, prompt_2, model_name):
     dataset_name = "sacson"
-    fig, ax = plt.subplots(1, 2)
-    if len(traj_1.shape) > 2:
-        trajs = [*traj_1, *traj_2]
-    else:
-        trajs = [traj_1, traj_2]
+    fig, ax = plt.subplots(2, 2, figsize=(20,20))
     start_pos = np.array([0,0])
-    goal_pos = np.array([0,0])
-    colors = []
+    goal_pos_1 = gt_trajs[0][-1]
+    goal_pos_2 = gt_trajs[1][-1]
     for i in range(traj_1.shape[0]):
-        curr_trajs = [trajs[i], trajs[i+traj_1.shape[0]]]
+        curr_trajs = [traj_1[i], gt_trajs[0]]
         plot_trajs_and_points(
-            ax[0], 
+            ax[0,0], 
             curr_trajs,
-            [start_pos, goal_pos], 
+            [start_pos, goal_pos_1], 
             traj_colors=[CYAN, MAGENTA],
             point_colors=[GREEN, RED],
         )
         plot_trajs_and_points_on_image(      
-            ax[1],
-            np.transpose(viz_img.numpy(), (1,2,0)),
+            ax[1,0],
+            np.transpose(viz_imgs[0].numpy(), (1,2,0)),
             dataset_name,
             curr_trajs,
-            [start_pos, goal_pos],
+            [start_pos, goal_pos_1],
             traj_colors=[CYAN, MAGENTA],
             point_colors=[GREEN, RED],
         )
-    ax[0].legend([prompt_1, prompt_2])
-    ax[1].legend([prompt_1, prompt_2])
-    ax[0].set_ylim((-5, 10))
-    ax[0].set_xlim((-5, 10))
+    for i in range(traj_2.shape[0]):
+        curr_trajs = [traj_2[i], gt_trajs[1]]
+        plot_trajs_and_points(
+            ax[0,1], 
+            curr_trajs,
+            [start_pos, goal_pos_2], 
+            traj_colors=[CYAN, MAGENTA],
+            point_colors=[GREEN, RED],
+        )
+        plot_trajs_and_points_on_image(      
+            ax[1,1],
+            np.transpose(viz_imgs[1].numpy(), (1,2,0)),
+            dataset_name,
+            curr_trajs,
+            [start_pos, goal_pos_2],
+            traj_colors=[CYAN, MAGENTA],
+            point_colors=[GREEN, RED],
+        )
+    ax[0,0].set_ylim((-5, 10))
+    ax[0,0].set_xlim((-5, 10))
+    ax[0,1].set_ylim((-5, 10))
+    ax[0,1].set_xlim((-5, 10))
+    ax[0,0].set_title(prompt_1)
+    ax[0,1].set_title(prompt_2)
+    ax[0,0].get_legend().remove()
+    ax[0,1].get_legend().remove()
     prompt_1_joined = ("_").join(prompt_1.split())
     prompt_2_joined = ("_").join(prompt_2.split())
     output_path = f"outputs/{model_name}/{prompt_1_joined}_vs_{prompt_2_joined}.png"
     plt.savefig(output_path)
     plt.show()
 
+    return output_path
+
 def load_config(config_path):
-    with open("../config/defaults.yaml", "r") as f:
+    with open("/home/noam/LLLwL/lcbc/config/defaults.yaml", "r") as f:
         default_config = yaml.safe_load(f)
     config = default_config
 
@@ -130,17 +151,7 @@ def load_config(config_path):
     return config
 
 
-def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding, prompt, pred_horizon, action_dim, num_samples, batch_size, linear_output, device, mask_image=False):
-    # if model.action_head_type == "dense":
-    #     if model.action_head.embedding_dim == 4:
-    #         if prompt == "Turn left":
-    #             prompt_embedding = torch.tensor([1, 0, 0, 0]).to(device).unsqueeze(0)
-    #         elif prompt == "Turn right":
-    #             prompt_embedding = torch.tensor([0, 1, 0, 0]).to(device).unsqueeze(0)
-    #         elif prompt == "Go forward":
-    #             prompt_embedding = torch.tensor([0, 0, 1, 0]).to(device).unsqueeze(0)
-    #         elif prompt == "Stop":
-    #             prompt_embedding = torch.tensor([0, 0, 0, 1]).to(device).unsqueeze(0)
+def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding, prompt, pred_horizon, action_dim, num_samples, batch_size, device, mask_image=False):
     try:
         categorical = model.action_head.embedding_dim == 4
     except:
@@ -164,39 +175,21 @@ def model_output_lnp(model, noise_scheduler, context, goal_img, prompt_embedding
         
 def main(args): 
     config = load_config(args.config)
-    if args.random_image:
-        if args.random_image:
-            searching = True 
-            possible_imgs = glob.glob(f"{args.image_path}/*/*.jpg", recursive=True)
-            while searching: 
-                current_path = np.random.choice(possible_imgs)
-                print(current_path)
-                traj_data = np.load(os.path.join(("/").join(current_path.split("/")[:-1]), "traj_data.pkl"), allow_pickle=True)
-                try:
-                    language_annotations = [lang["traj_description"] for lang in traj_data["language_annotations"]]
-                except:
-                    language_annotations = None
-                current_img = Image.open(current_path)
-                print("LANGUAGE: ")
-                print(language_annotations)
-                response = input("Use this image? (y/n): ")
-                plt.imshow(current_img)
-                plt.show()
-                idx = int(current_path.split("/")[-1].strip(".jpg"))
-                if response == "y" and idx >= config["context_size"]: 
-                    args.prompt_1 = input("Enter prompt 1: ")
-                    args.prompt_2 = input("Enter prompt 2: ")
-                    searching = False
-                else: 
-                    continue
-            args.image_path = ("/").join(current_path.split("/")[:-1])
-            print(args.image_path)
-            args.start_idx = int(current_path.split("/")[-1].strip(".jpg")) - config["context_size"]
-    else:
-        print(args.image_path)
-        args.start_idx = 0
+    print(config["context_size"])
+    # Load the context for each eval path 
 
-
+    if args.eval_path_1:
+        prompt_1 = args.eval_path_1.split("/")[-1]
+        traj_data_1 = np.load(os.path.join(args.eval_path_1, "traj_data.pkl"), allow_pickle=True)
+        pos_1 = np.array(traj_data_1["position"])
+        pos_1 = pos_1 - pos_1[0]
+        pos_1[:, [1, 0]] = pos_1[:, [0, 1]]
+    if args.eval_path_2:
+        prompt_2 = args.eval_path_2.split("/")[-1]
+        traj_data_2 = np.load(os.path.join(args.eval_path_2, "traj_data.pkl"), allow_pickle=True)
+        pos_2 = np.array(traj_data_2["position"])
+        pos_2 = pos_2 - pos_2[0]
+        pos_2[:, [1, 0]] = pos_2[:, [0, 1]]
     if config["model_type"] == "rft":
         model = ResNetFiLMTransformer(
             config["efficientnet_model"],
@@ -289,57 +282,54 @@ def main(args):
     model.to(args.device)
     model.eval()
     if config["language_encoder"] == "clip":
-        prompt_embedding_1 = clip_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
-        prompt_embedding_2 = clip_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
+        prompt_embedding_1 = clip_embed(prompt_1, args.device).to(torch.float).to(args.device)
+        prompt_embedding_2 = clip_embed(prompt_2, args.device).to(torch.float).to(args.device)
     elif config["language_encoder"] == "t5":
-        print("using t5")
-        prompt_embedding_1 = t5_embed(args.prompt_1, args.device).to(torch.float).to(args.device)
-        prompt_embedding_2 = t5_embed(args.prompt_2, args.device).to(torch.float).to(args.device)
-    context_orig = []
-    for i in range(args.start_idx, args.start_idx+config["context_size"]+1):
-        try:
-            context_orig.append(Image.open(os.path.join(args.image_path, str(i)+".jpg")))
-        except:
-            context_orig.append(Image.open(os.path.join(args.image_path, str(i)+".png")))
-    context = transform_images(context_orig, IMAGE_SIZE).to(args.device)
-    viz_context = transform_images(context_orig, VISUALIZATION_IMAGE_SIZE)
-    viz_img = transform_images(context_orig[-1], VISUALIZATION_IMAGE_SIZE)[0] 
-    retry = True
-    while retry:
+        prompt_embedding_1 = t5_embed(prompt_1, args.device).to(torch.float).to(args.device)
+        prompt_embedding_2 = t5_embed(prompt_2, args.device).to(torch.float).to(args.device)
+
+    num_imgs = min(len(glob.glob(os.path.join(args.eval_path_1, "*.jpg"))), len(glob.glob(os.path.join(args.eval_path_2, "*.jpg"))))
+    viz_images = []
+    for idx in range(num_imgs - config["context_size"]):
+        print(f"On step: {idx} of {num_imgs - config['context_size']}")
+        if args.eval_path_1:
+            context_1 = [Image.open(os.path.join(args.eval_path_1, str(i)+".jpg")) for i in range(idx, idx + config["context_size"] + 1)]
+        if args.eval_path_2:
+            context_2 = [Image.open(os.path.join(args.eval_path_2, str(i)+".jpg")) for i in range(idx, idx + config["context_size"] + 1)]
+
+        context_1_transf = transform_images(context_1, IMAGE_SIZE).to(args.device)
+        context_2_transf = transform_images(context_2, IMAGE_SIZE).to(args.device)
+        viz_1 = transform_images(context_1[-1], VISUALIZATION_IMAGE_SIZE)[0] 
+        viz_2 = transform_images(context_2[-1], VISUALIZATION_IMAGE_SIZE)[0]
         with torch.no_grad():
             if config["model_type"] == "rft":
-                output_1 = model(context.clone(), prompt_embedding_1).detach().cpu().numpy()
-                output_2 = model(context.clone(), prompt_embedding_2).detach().cpu().numpy()
+                output_1 = model(context_1_transf.clone(), prompt_embedding_1).detach().cpu().numpy()
+                output_2 = model(context_2_transf.clone(), prompt_embedding_2).detach().cpu().numpy()
             elif config["model_type"] == "lnp":
-                output_1 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
-                output_2 = model_output_lnp(model, noise_scheduler, context.clone(), None, prompt_embedding_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device)
+                output_1 = model_output_lnp(model, noise_scheduler, context_1_transf.clone(), None, prompt_embedding_1, config["len_traj_pred"], 2, args.num_samples, 1, args.linear_output, args.device)
+                output_2 = model_output_lnp(model, noise_scheduler, context_2_transf.clone(), None, prompt_embedding_2, config["len_traj_pred"], 2, args.num_samples, 1, args.linear_output, args.device)
             elif config["model_type"] == "lnp_multi_modal":
                 mask_image = True
                 goal_img = torch.zeros((1, 3, 96, 96)).to(args.device)
-                output_1 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_1, args.prompt_1, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
-                output_2 = model_output_lnp(model, noise_scheduler, context.clone(), goal_img, prompt_embedding_2, args.prompt_2, config["len_traj_pred"], 2, 8, 1, args.linear_output, args.device, mask_image)
+                output_1 = model_output_lnp(model, noise_scheduler, context_1_transf.clone(), goal_img, prompt_embedding_1, prompt_1, config["len_traj_pred"], 2, args.num_samples, 1, args.device, mask_image)
+                output_2 = model_output_lnp(model, noise_scheduler, context_2_transf.clone(), goal_img, prompt_embedding_2, prompt_2, config["len_traj_pred"], 2, args.num_samples, 1, args.device, mask_image)
             model_name = args.model_path.split("/")[-1]
             os.makedirs(f"outputs/{model_name}", exist_ok=True)
-            compare_output(output_1, output_2, viz_img, args.prompt_1, args.prompt_2, viz_context, model_name)
-        check = input("Retry? (y/n)")
-        if check == "y":
-            retry = True
-        else:
-            retry = False
-
+            viz_path = compare_output(output_1, output_2, [pos_1, pos_2], [viz_1, viz_2], prompt_1, prompt_2, model_name)
+            curr_img = Image.open(viz_path)
+            viz_images.append(curr_img)
+        
+        viz_images[0].save(f"outputs/{model_name}/{prompt_1}_vs_{prompt_2}.gif", save_all=True, append_images=viz_images[1:], duration=1000, loop=0)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model_path", type=str, help="path to model")
-    parser.add_argument("--prompt_1", type=str, help="prompt to generate")
-    parser.add_argument("--prompt_2", type=str, help="prompt to generate")
-    parser.add_argument("--image_path", type=str, help="path to images")
-    parser.add_argument("--start_idx", type=int, help="start index of context")
-    parser.add_argument("--config", type=str, help="path to config file")
-    parser.add_argument("--random_image", action="store_true", help="use random image")
-    parser.add_argument("--linear_output", action="store_true", help="use linear output")
-    parser.add_argument("--checkpoint", type=int, help="checkpoint to load")
+    parser.add_argument("--model_path", type=str, help="path to model", default="/home/noam/LLLwL/lcbc/logs/lcbc/lelan_multi_modal_2024_12_06_15_44_19")
+    parser.add_argument("--eval_path_1", type=str, help="path to eval data", default="gnm_version/avoid_the_person")
+    parser.add_argument("--eval_path_2", type=str, help="path to eval data", default="gnm_version/move_toward_the_person")
+    parser.add_argument("--config", type=str, help="path to config file", default="/home/noam/LLLwL/lcbc/config/transformer_interleaved_atomic_full.yaml")
+    parser.add_argument("--checkpoint", type=int, help="checkpoint to load", default="15")
+    parser.add_argument("--num_samples", type=int, help="number of samples", default=8)
     args = parser.parse_args()
     device = "cuda:1" if torch.cuda.is_available() else None
     args.device = device

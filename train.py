@@ -87,7 +87,7 @@ def main(config):
         weights.append(data_config["weight"])
     total_weight = sum(weights)
     train_dataset_weights = [w / total_weight for w in weights]
-    print(train_dataset_weights)
+    print(len(train_dataset_weights))
 
     for dataset_idx, dataset_name in enumerate(config["datasets"]):
         data_config = config["datasets"][dataset_name]
@@ -122,10 +122,12 @@ def main(config):
                         normalize=config["normalize"],
                         goal_type=config["goal_type"],
                         language_encoder=config["language_encoder"],
+                        uncond_prob=config["unconditional_prob"],
                     )
                     if data_split_type == "train":
                         if len(dataset) == 0:
                             print(f"Skipping dataset {dataset_name} for training")
+                            print(dataset)
                             train_dataset_weights.pop(dataset_idx)
                             continue
                         else:
@@ -215,6 +217,7 @@ def main(config):
                 late_fusion=config["late_fusion"],
                 per_obs_film=config["per_obs_film"],
                 use_film=config["use_film"],
+                use_transformer=config["use_transformer"],
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
     else:
