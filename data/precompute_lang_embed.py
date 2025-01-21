@@ -17,8 +17,8 @@ REDO = True
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/cory_hall_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/go_stanford_cropped_labelled"
 # input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets/sacson_labelled"
-input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset"
-lang_txt_paths = glob.glob(f"{input_path}/*/traj_data_filtered.pkl", recursive=True)
+input_path = "/home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2"
+lang_txt_paths = glob.glob(f"{input_path}/*/*/traj_data_filtered.pkl", recursive=True)
 
 if USE_CLIP:
     model_version = "ViT-B/32"
@@ -36,8 +36,11 @@ for path in tqdm(lang_txt_paths):
     traj_data_filtered = None
     if os.path.exists(filtered_path):
         # Load filtered data
-        traj_data_filtered = pkl.load(open(filtered_path, "rb"))
-
+        try:
+            traj_data_filtered = pkl.load(open(filtered_path, "rb"))
+        except:
+            print(f"Error in path {path}")
+            
     traj_data = None
     if "traj_data.pkl" in path:
         with open(path, "rb") as old_file:
@@ -45,9 +48,14 @@ for path in tqdm(lang_txt_paths):
 
     if traj_data_filtered is not None and traj_data is not None:
         traj_data["language_annotations"] = traj_data_filtered["language_annotations"]
-    else:
+    elif traj_data_filtered is not None and traj_data is None:
         traj_data = traj_data_filtered
         path = filtered_path
+    elif traj_data_filtered is None and traj_data is not None:
+        pass
+    else:
+        print(f"Error in path {path}")
+        continue
 
     if "text_features" in traj_data.keys() and not REDO:
         print("already exists")

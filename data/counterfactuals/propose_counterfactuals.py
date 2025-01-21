@@ -46,7 +46,6 @@ def pil_to_base64(img):
         return base64.b64encode(f.read()).decode("utf-8")
 
 def draw_trajectory(path, start, end):
-    print("Drawing trajectory")
     # Load the trajectory info 
     with open(path + "/traj_data.pkl", "rb") as f:
         traj_data = pkl.load(f)
@@ -399,7 +398,7 @@ def model_output(model, context, prompt_embedding, prompt, noise_scheduler, mode
 
 def main(args):
 
-    with open(args.config_path, "r") as f:
+    with open(args.config, "r") as f:
         config = yaml.safe_load(f)
     with open(config["model_config"], "r") as f:
         model_config = yaml.safe_load(f)
@@ -452,6 +451,17 @@ def main(args):
         # Discretize trajectory into atomic actions
         atomic_trajs = discretize_traj(path, config)
 
+        # Get the context for the atomic actions
+        ll_context = []
+        for atomic_traj in atomic_trajs:
+            start_idx = atomic_traj["start_idx"]
+            path = atomic_traj["path"]
+
+            # Load image
+            img = Image.open(path + f"/{start_idx}.jpg")
+            img = pil_to_base64(img)
+            ll_context.append(img)
+
         # Print atomic trajs
         labels = [traj["language_instruction"] for traj in atomic_trajs]
         if config["debug"]:
@@ -459,7 +469,6 @@ def main(args):
             print(f"Labels: {labels}")
         # Plot the full trajectory on the image
         len_traj = len(glob.glob(path + "/*.jpg"))
-        print(f"Length of trajectory: {len_traj}")
         [out_img, goal_img] = draw_trajectory(path, 0, len_traj-1)
 
         if args.viz:
@@ -495,16 +504,18 @@ def main(args):
         print("Filtered lang: ", filtered_lang)
 
         # Prompt the model to propose counterfactuals
-        new_prompt=f"The image is the trajectory a robot took projected onto its initial observation. The low level actions taken by the robot are {labels} and the high level instructions that have been proposed to be associated with the trajectory are {filtered_lang}. Propose a different trajectory the robot could have taken to interact with the environment in a different way. For example, is the robot is in a hall, it can travel along the walls or in the center. Another example is that the robot could move to a specifc object in the scene. Enumerate several different alternatives. Another example is if the robot Only propose short horizon alternatives and provide specific information about the task. Give the previous low level action and its index in the low level actions list from which the trajectory should take an alternative path and then low level action, from the list: ['Turn left', 'Turn right', 'Go forward', 'Stop', 'Adjust left', 'Adjust right'] which performs the alternative path. Your output should be in the form of a list of json objects with a field for the trajectory and a field for reasoning. For example, if the input low level actions are ['Go forward', 'Go forward', 'Turn left'], the original instruction was 'Move towards the door on the left' then a potential output could be : '['prev_action' : ('Go forward', 1), 'proposed_action' : 'Turn right', 'new_instruction' : ' Move away from the door on the left' 'reasoning': 'The robot could try instead moving away from the door on the left to explore the room further. This would be a good alternative to the original instruction.'"
+        # new_prompt=f"The image is the trajectory a robot took projected onto its initial observation. The low level actions taken by the robot are {labels} and the high level instructions that have been proposed to be associated with the trajectory are {filtered_lang}. Propose a different trajectory the robot could have taken to interact with the environment in a different way. For example, is the robot is in a hall, it can travel along the walls or in the center. Another example is that the robot could move to a specifc object in the scene. Enumerate several different alternatives. Another example is if the robot Only propose short horizon alternatives and provide specific information about the task. Give the previous low level action and its index in the low level actions list from which the trajectory should take an alternative path and then low level action, from the list: ['Turn left', 'Turn right', 'Go forward', 'Stop', 'Adjust left', 'Adjust right'] which performs the alternative path. Your output should be in the form of a list of json objects with a field for the trajectory and a field for reasoning. For example, if the input low level actions are ['Go forward', 'Go forward', 'Turn left'], the original instruction was 'Move towards the door on the left' then a potential output could be : '['prev_action' : ('Go forward', 1), 'proposed_action' : 'Turn right', 'new_instruction' : ' Move away from the door on the left' 'reasoning': 'The robot could try instead moving away from the door on the left to explore the room further. This would be a good alternative to the original instruction.'"
+        new_prompt=f"A robot is moving through an environment and has performed a certain trajectory. The trajectory can be described by the sequence of low level actions taken by the robot are {labels} and the high level instructions that have been proposed to be associated with the trajectory are {filtered_lang}. The provided images are the first person image observations taken by the robot at the beginning on each low level action. Given this information, propose a different trajectory the robot could have taken to interact with the environment in a different way. First, observation what objects and structures are present and their locations relative to the robot in the scene. For example, is the robot is in a hall, it can travel along the walls or in the center, so you may note if there are walls and on which sides of the robot. Another example is that the robot could move to a specifc object in the scene, and therefore note where different objects are relative to the robot. Enumerate several different alternatives. Only propose short horizon alternatives and provide specific information about the task. Give the previous low level action and its index in the low level actions list from which the trajectory should take an alternative path and then low level action, from the list: ['Turn left', 'Turn right', 'Go forward', 'Stop', 'Adjust left', 'Adjust right'] which performs the alternative path. Your output should be in the form of a list of json objects with a field for the trajectory and a field for reasoning. For example, if the input low level actions are ['Go forward', 'Go forward', 'Turn left'], the original instruction was 'Move towards the door on the left' then a potential output could be : '['prev_action' : ('Go forward', 1), 'proposed_action' : 'Turn right', 'new_instruction' : ' Move away from the door on the left' 'reasoning': 'The robot could try instead moving away from the door on the left to explore the room further. This would be a good alternative to the original instruction.'"
 
         # Ask the VLM about the best and new instructions
         context = []
-        context.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_base64}",
-                            },
-                        })
+        for ll_base64 in ll_context:
+            context.append({
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/jpeg;base64,{ll_base64}",
+                                },
+                            })
         context.append(new_prompt)
 
         message = {"role": "user", "content": context}
@@ -531,88 +542,89 @@ def main(args):
             except:
                 tries += 1
                 pass
+        if tries == 10:
+            print("Failed to get counterfactuals")
+            continue
 
         # Next step, annotate with rollout from model 
-        print("Num of counterfactuals: ", len(cf_json))
         for cf_idx, cf in enumerate(cf_json):
             action, idx = cf["prev_action"]
             proposed_action = cf["proposed_action"]
             new_instruction = cf["new_instruction"]
             
+            print(f"Counterfactual: {cf_idx} of {len(cf_json)}")
             # Load in the context associated with the action
-            print(f"Action: {action}, Index: {idx}")
             prev_atomic = atomic_trajs[idx]
+            print(f"Context last idx: {prev_atomic['end_idx']}")
             if prev_atomic["end_idx"] < model_config["context_size"] - 1 or (prev_atomic["end_idx"] - model_config["context_size"] - 1) < 0:
                 print("Not enough context")
-                continue
-            print(f"End idx: {prev_atomic['end_idx']}")
-            print(f"End idx: {prev_atomic['end_idx'] - model_config['context_size'] - 1}")
-            context = [Image.open(path + f"/{i}.jpg") for i in range(prev_atomic["end_idx"] - model_config["context_size"] - 1, prev_atomic["end_idx"])]
-            context = transform_images(context, IMAGE_SIZE).to(args.device)
+                pass
+            else:
+                context = [Image.open(path + f"/{i}.jpg") for i in range(prev_atomic["end_idx"] - model_config["context_size"] - 1, prev_atomic["end_idx"])]
+                context = transform_images(context, IMAGE_SIZE).to(args.device)
 
-            viz_context = transform_images(Image.open(path + f"/{prev_atomic['end_idx']}.jpg"), VIZ_IMAGE_SIZE)
+                viz_context = transform_images(Image.open(path + f"/{prev_atomic['end_idx']}.jpg"), VIZ_IMAGE_SIZE)
 
-            lang_embed = action_embeddings[proposed_action].to(args.device)
+                lang_embed = action_embeddings[proposed_action].to(args.device)
 
-            # Get the model rollout 
-            rollout = model_output(model, context, lang_embed, action, noise_scheduler, model_config, args.device)
-            rollout = rollout - rollout[:,[0],:]
+                # Get the model rollout 
+                rollout = model_output(model, context, lang_embed, action, noise_scheduler, model_config, args.device)
+                rollout = rollout - rollout[:,[0],:]
 
-            # transform into the frame of the original trajectory
-            last_pos = traj_data["position"][prev_atomic["end_idx"]-1]
-            last_yaw = float(traj_data["yaw"][prev_atomic["end_idx"]-1])
-            rot_mat = np.array([[np.cos(last_yaw), -np.sin(last_yaw)], [np.sin(last_yaw), np.cos(last_yaw)]]).reshape(-1, 2, 2)
-            rollout_rotated = rot_mat@np.transpose(rollout, (0, 2, 1)) # rotate
-            rollout_rotated = np.transpose(rollout_rotated, (0, 2, 1))
+                # transform into the frame of the original trajectory
+                last_pos = traj_data["position"][prev_atomic["end_idx"]-1]
+                last_yaw = float(traj_data["yaw"][prev_atomic["end_idx"]-1])
+                rot_mat = np.array([[np.cos(last_yaw), -np.sin(last_yaw)], [np.sin(last_yaw), np.cos(last_yaw)]]).reshape(-1, 2, 2)
+                rollout_rotated = rot_mat@np.transpose(rollout, (0, 2, 1)) # rotate
+                rollout_rotated = np.transpose(rollout_rotated, (0, 2, 1))
 
-            # unnorm the rollout
-            dataset_name = path.split("/")[-2]
-            waypoint_spacing = data_config[dataset_name]["metric_waypoint_spacing"]
-            rollout = rollout * waypoint_spacing
-            rollout = rollout_rotated + np.expand_dims(last_pos, 0) # translate
+                # unnorm the rollout
+                dataset_name = path.split("/")[-2]
+                waypoint_spacing = data_config[dataset_name]["metric_waypoint_spacing"]
+                rollout = rollout * waypoint_spacing
+                rollout = rollout_rotated + np.expand_dims(last_pos, 0) # translate
 
+                # Combine the part of the old traj with the new traj
+                old_traj = traj_data["position"][:prev_atomic["end_idx"]+1].copy()
+                cf_trajs = []
+                for i in range(rollout.shape[0]):
+                    cf_traj = np.concatenate([old_traj, rollout[i,:,:]], axis=0)
+                    cf_trajs.append(cf_traj)
 
-            # Combine the part of the old traj with the new traj
-            old_traj = traj_data["position"][:prev_atomic["end_idx"]+1].copy()
-            cf_trajs = []
-            for i in range(rollout.shape[0]):
-                cf_traj = np.concatenate([old_traj, rollout[i,:,:]], axis=0)
-                cf_trajs.append(cf_traj)
+                # Plot both trajs
+                os.makedirs("viz", exist_ok=True)
+                plt.close()
+                fig, ax = plt.subplots(1,2)
+                for i in range(len(cf_trajs)):
+                    ax[0].plot(cf_trajs[i][:,0], cf_trajs[i][:,1])
+                ax[0].plot(traj_data["position"][:,0], traj_data["position"][:,1], label="Original", color="red")
+                ax[0].scatter(traj_data["position"][0,0], traj_data["position"][0,1], c='g')
+                ax[0].scatter(traj_data["position"][-1,0], traj_data["position"][-1,1], c='b')
+                ax[0].set_title(f"Counterfactual Trajectory: {proposed_action}")
 
-            # Plot both trajs
-            # plt.close()
-            # fig, ax = plt.subplots(1,2)
-            # for i in range(len(cf_trajs)):
-            #     ax[0].plot(cf_trajs[i][:,0], cf_trajs[i][:,1])
-            # ax[0].plot(traj_data["position"][:,0], traj_data["position"][:,1], label="Original", color="red")
-            # ax[0].scatter(traj_data["position"][0,0], traj_data["position"][0,1], c='g')
-            # ax[0].scatter(traj_data["position"][-1,0], traj_data["position"][-1,1], c='b')
-            # ax[0].set_title(f"Counterfactual Trajectory: {proposed_action}")
+                ax[1].imshow(viz_context.squeeze().permute(1,2,0))
+                ax[1].set_title("Context")
+                plot_name = ('_').join(cf['new_instruction'].lower().split(' '))
+                if os.path.exists(f"viz/cf_traj_{plot_name}.jpg"):
+                    os.remove(f"viz/cf_traj_{plot_name}.jpg")
+                plt.savefig(f"viz/cf_traj_{plot_name}.jpg")
 
-            # ax[1].imshow(viz_context.squeeze().permute(1,2,0))
-            # ax[1].set_title("Context")
-            # plot_name = ('_').join(cf['new_instruction'].lower().split(' '))
-            # if os.path.exists(f"cf_traj_{plot_name}.jpg"):
-            #     os.remove(f"cf_traj_{plot_name}.jpg")
-            # plt.savefig(f"cf_traj_{plot_name}.jpg")
+                # Save the counterfactuals to a new folder
+                cf_folder = config["counterfactuals_output"] + f"/{path.split('/')[-1]}_cf_{cf_idx}"
+                if not os.path.exists(cf_folder):
+                    os.makedirs(cf_folder)
+                
+                rollout = rollout[0,:,:]
+                cf_traj_data = {}
+                cf_traj_data["position"] = cf_traj
+                cf_traj_data["yaw"] = [np.arctan2((cf_traj[i+1,1] - cf_traj[i,1]), (cf_traj[i+1,0] - cf_traj[i,0])) for i in range(len(cf_traj)-1)]
+                cf_traj_data["language_annotations"] = [{"traj_description": new_instruction}]
 
-            # Save the counterfactuals to a new folder
-            cf_folder = config["counterfactuals_output"] + f"/{path.split('/')[-1]}_cf_{cf_idx}"
-            print(cf_folder)
-            if not os.path.exists(cf_folder):
-                os.makedirs(cf_folder)
-            
-            rollout = rollout[0,:,:]
-            cf_traj_data = {}
-            cf_traj_data["position"] = cf_traj
-            cf_traj_data["yaw"] = [np.arctan2((cf_traj[i+1,1] - cf_traj[i,1]), (cf_traj[i+1,0] - cf_traj[i,0])) for i in range(len(cf_traj)-1)]
-            cf_traj_data["language_annotations"] = [{"traj_description": new_instruction}]
-
-            with open(cf_folder + "/traj_data_filtered.pkl", "wb") as f:
-                pkl.dump(cf_traj_data, f)
-            
-            for image_idx in range(old_traj.shape[0]):
-                shutil.copy(path + f"/{image_idx}.jpg", cf_folder + f"/{image_idx}.jpg")
+                with open(cf_folder + "/traj_data_filtered.pkl", "wb") as f:
+                    pkl.dump(cf_traj_data, f)
+                
+                for image_idx in range(old_traj.shape[0]):
+                    shutil.copy(path + f"/{image_idx}.jpg", cf_folder + f"/{image_idx}.jpg")
 
         # Save the filtered language instructions to a copied traj_data
         traj_data_filtered = traj_data.copy()
@@ -620,18 +632,38 @@ def main(args):
         traj_data_filtered_path = path + "/traj_data_filtered.pkl"
         with open(traj_data_filtered_path, "wb") as f:
             pkl.dump(traj_data_filtered, f)
+        
+
+        if len(os.listdir(config["counterfactuals_output"])) >= config["min_num_cfs"]:
+            print("Got enough counterfactual!")
+            break
+        else:
+            print(f"Num of counterfactuals: {len(os.listdir(config['counterfactuals_output']))}/{config['min_num_cfs']}\r")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", type=str, default="data/counterfactuals")
     parser.add_argument("--viz", action="store_true")
-    parser.add_argument("--config_path", type=str, default="counterfactuals.yaml")
+    parser.add_argument("--config", type=str, default="counterfactuals.yaml")
     args = parser.parse_args()
 
     device = "cuda:1" if torch.cuda.is_available() else None
     args.device = device
-    
-    main(args)
+    failure_count = 0
+    print("Running until complete!")
+    while True:
+        try:
+            try:
+                main(args)
+                break
+            except Exception as e:
+                print("Function errored out!", e)
+                print(f"Function failed {failure_count} times")
+                print("Retrying ... ")
+                failure_count += 1
+        except KeyboardInterrupt:
+            break
+    print(f"Function completed successfully with {failure_count} failures")
 
 
     

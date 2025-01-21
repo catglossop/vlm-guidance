@@ -11,7 +11,7 @@ from PIL import Image
 
 
 
-class LCBCDataset(tfds.core.GeneratorBasedBuilder):
+class CfDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
     VERSION = tfds.core.Version('1.0.0')
@@ -112,8 +112,8 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets_backup/train'),
-            'val': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets_backup/val'),
+            'train': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/train'),
+            'val': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/val'),
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:
@@ -123,7 +123,7 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
             folder_names = [
                 f for f in os.listdir(data_dir)
                 if os.path.isdir(os.path.join(data_dir, f))
-                and "traj_data.pkl" in os.listdir(os.path.join(data_dir, f))
+                and "traj_data_w_embed_t5.pkl" in os.listdir(os.path.join(data_dir, f))
             ]   
 
             return folder_names
@@ -162,7 +162,10 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
 
 
         def _process_image(path, mode='stretch'):
-            img = Image.open(path)
+            try:
+                img = Image.open(path)
+            except:
+                img = Image.new('RGB', (64, 64), (255, 255, 255))
             if mode == 'stretch':
                 img = img.resize((64, 64))
             elif mode == 'crop':
@@ -183,6 +186,9 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
             positions = traj_data["position"][start_index:end_index:waypoint_spacing]
             goal_pos = traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)]
 
+            if type(yaw) == list:
+                yaw = np.array(yaw)
+                print(yaw.shape)
             if len(yaw.shape) == 2:
                 yaw = yaw.squeeze(1)
 
@@ -190,7 +196,8 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
                 const_len = len_traj_pred + 1 - yaw.shape[0]
                 yaw = np.concatenate([yaw, np.repeat(yaw[-1], const_len)])
                 positions = np.concatenate([positions, np.repeat(positions[-1][None], const_len, axis=0)], axis=0)
-
+            yaw = yaw[:len_traj_pred + 1]
+            positions = positions[:len_traj_pred + 1]
             assert yaw.shape == (len_traj_pred + 1,), f"{yaw.shape} and {(len_traj_pred + 1,)} should be equal"
             assert positions.shape == (len_traj_pred + 1, 2), f"{positions.shape} and {(len_traj_pred + 1, 2)} should be equal"
 
@@ -222,7 +229,7 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
             episode_paths = []
             for j in range(len(data["language_annotations"])):
                 episode = []
-                for i in range(len(data['position'])):
+                for i in range(len(data['position']) -1):
                     # compute Kona language embedding
                     language_instruction = data['language_annotations'][j]["traj_description"]
                     # language_embedding = self._embed([language_instruction])[0].numpy()
@@ -233,18 +240,21 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
                     img = _process_image(os.path.join(episode_path, image_path), mode='stretch')
 
                     #Get state observation
+                    data['yaw'] = np.array(data['yaw'])
                     position = data['position'][i]
                     yaw = data['yaw'][i].reshape(-1)
                     state = np.concatenate((position, yaw))
                     yaw_rotmat = _yaw_rotmat(yaw[0])
 
                     #Recover action(s)
-                    action, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
-                        waypoint_spacing=1, learn_angle=False, normalize=False) 
-                    action_angle, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
-                        waypoint_spacing=1, learn_angle=True, normalize=False)
-                    action = action[0]
-                    action_angle = action_angle[0]
+                    action = np.array([0, 0], dtype=np.float64)
+                    action_angle = np.array([0, 0, 0], dtype=np.float64)
+                    # action, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
+                    #     waypoint_spacing=1, learn_angle=False, normalize=False) 
+                    # action_angle, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
+                    #     waypoint_spacing=1, learn_angle=True, normalize=False)
+                    # action = action[0]
+                    # action_angle = action_angle[0]
                     #action = actions[0]
                     #action = np.concatenate((action, [0, 0, 0, 0, 0]))
 
@@ -289,7 +299,7 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
         for name in dataset_names:
             episode_paths[name] = _get_folder_names(os.path.join(path, name))
 
-        # print("START PARSING")
+        print(episode_paths['cf_dataset'])
         # for smallish datasets, use single-thread parsing
         for name, paths in episode_paths.items():
             for sample in paths:

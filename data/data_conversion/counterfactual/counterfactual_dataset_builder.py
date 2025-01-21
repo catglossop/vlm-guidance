@@ -11,7 +11,7 @@ from PIL import Image
 
 
 
-class LCBCDataset(tfds.core.GeneratorBasedBuilder):
+class CfDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
     VERSION = tfds.core.Version('1.0.0')
@@ -112,8 +112,8 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets_backup/train'),
-            'val': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/lcbc_datasets_backup/val'),
+            'train': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/train'),
+            'val': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/val'),
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:

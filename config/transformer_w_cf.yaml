@@ -4,7 +4,7 @@ run_name: lelan_multi_modal
 # training setup
 use_wandb: True # set to false if you don't want to log to wandb
 train: True
-batch_size: 128
+batch_size: 130
 epochs: 200
 gpu_ids: [0]
 all_gpu_ids: [0,1]
@@ -362,10 +362,26 @@ datasets:
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: False # negative mining from the ViNG paper (Shah et al.)
     weight: 0.25
+  go_stanford2_atomic_adjust_left:
+    data_folder: /hdd/LLLwL_datasets/atomic_dataset_finer/go_stanford2/adjust_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_adjust_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_adjust_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 0.25
   go_stanford2_atomic_right:
     data_folder: /hdd/LLLwL_datasets/atomic_dataset_finer/go_stanford2/turn_right
     train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_right/train/ # path to train folder with traj_names.txt
     test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 0.25
+  go_stanford2_atomic_adjust_right:
+    data_folder: /hdd/LLLwL_datasets/atomic_dataset_finer/go_stanford2/adjust_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_adjust_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_adjust_right/test/ # path to test folder with traj_names.txt
     end_slack: 0 # because many trajectories end in collisions
     goals_per_obs: 1 # how many goals are sampled per observation
     negative_mining: False # negative mining from the ViNG paper (Shah et al.)
@@ -389,7 +405,7 @@ datasets:
 
 
   go_stanford_cf:
-    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset/go_stanford_cf
+    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/go_stanford_cf
     train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cf/train/ # path to train folder with traj_names.txt
     test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cf/test/ # path to test folder with traj_names.txt
     end_slack: 0 # because many trajectories end in collisions
@@ -397,7 +413,7 @@ datasets:
     negative_mining: False # negative mining from the ViNG paper (Shah et al.)
     weight: 0.25
   scand_cf:
-    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset/scand_cf
+    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/scand_cf
     train: /home/noam/LLLwL/lcbc/data/data_splits/scand_cf/train/ # path to train folder with traj_names.txt
     test: /home/noam/LLLwL/lcbc/data/data_splits/scand_cf/test/ # path to test folder with traj_names.txt
     end_slack: 0 # because many trajectories end in collisions
@@ -405,7 +421,7 @@ datasets:
     negative_mining: False # negative mining from the ViNG paper (Shah et al.)
     weight: 0.25
   cory_hall_cf:
-    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset/cory_hall_cf
+    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/cory_hall_cf
     train: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_cf/train/ # path to train folder with traj_names.txt
     test: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_cf/test/ # path to test folder with traj_names.txt
     end_slack: 0 # because many trajectories end in collisions
@@ -413,7 +429,7 @@ datasets:
     negative_mining: False # negative mining from the ViNG paper (Shah et al.)
     weight: 0.25
   sacson_cf:
-    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset/sacson_cf
+    data_folder: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/sacson_cf
     train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_cf/train/ # path to train folder with traj_names.txt
     test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_cf/test/ # path to test folder with traj_names.txt
     end_slack: 0 # because many trajectories end in collisions
