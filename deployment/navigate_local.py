@@ -143,11 +143,10 @@ class NavigateLocal(Node):
         transf_imgs = []
         for pil_img in pil_imgs:
             w, h = pil_img.size
-            if center_crop:
-                if w > h:
-                    pil_img = TF.center_crop(pil_img, (h, int(h * IMAGE_ASPECT_RATIO)))  # crop to the right ratio
-                else:
-                    pil_img = TF.center_crop(pil_img, (int(w / IMAGE_ASPECT_RATIO), w))
+            if w > h:
+                pil_img = TF.center_crop(pil_img, (h, int(h * IMAGE_ASPECT_RATIO)))  # crop to the right ratio
+            else:
+                pil_img = TF.center_crop(pil_img, (int(w / IMAGE_ASPECT_RATIO), w))
             pil_img = pil_img.resize(image_size) 
             transf_img = TF.to_tensor(pil_img)
             transf_img = torch.unsqueeze(transf_img, 0)
@@ -238,13 +237,15 @@ class NavigateLocal(Node):
             print(f"Loading model from {self.ckpth_path}")
         else:
             raise FileNotFoundError(f"Model weights not found at {self.ckpth_path}")
-        if self.model_type.split("_")[0] == "lelan": 
+        if self.model_params["action_head"] == "diffusion": 
             self.noise_scheduler = DDPMScheduler(
                     num_train_timesteps=self.model_params["num_diffusion_iters"],
                     beta_schedule='squaredcos_cap_v2',
                     clip_sample=True,
                     prediction_type='epsilon'
                 )
+        else:
+            self.noise_scheduler = None
         self.model = load_model(
             self.ckpth_path,
             self.model_params,
@@ -292,23 +293,25 @@ class NavigateLocal(Node):
             self.sampled_actions_pub.publish(self.sampled_actions_msg)
             self.naction = self.nactions[0] 
             self.chosen_waypoint = self.naction[self.args.waypoint] 
-        elif self.model_type.split("_")[0] == "lelan":
-            if ("_").join(self.model_type.split("_")[:2]) == "lelan_mm":
-                mask_image = True
-                goal_img = torch.zeros((1, 3, 96, 96)).to(self.device)
-            else:
-                goal_img = None
+        else:
+            # if ("_").join(self.model_type.split("_")[:2]) == "lelan_mm":
+            mask_image = False
+            goal_img = torch.zeros((1, 3, 96, 96)).to(self.device)
+            # else:
+            #     goal_img = None
             self.nactions = model_output_diffusion_eval(self.model, 
                                                        self.noise_scheduler, 
                                                        self.obs_images.clone(), 
                                                        self.language_embedding.clone(), 
+                                                       self.language_prompt,
                                                        goal_img,
                                                        self.model_params["len_traj_pred"], 
                                                        2, 
                                                        self.num_samples, 
                                                        1, 
                                                        self.device, 
-                                                       mask_image)["actions"].detach().cpu().numpy()
+                                                       mask_image, 
+                                                       self.model_params["categorical"])["actions"].detach().cpu().numpy()
             self.sampled_actions_msg = Float32MultiArray()
             self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.nactions.flatten())).tolist()
             print("Sampled actions shape: ", self.nactions.shape)

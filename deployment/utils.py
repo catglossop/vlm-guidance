@@ -101,26 +101,47 @@ def load_model(
                 mha_num_attention_heads=config["mha_num_attention_heads"],
                 mha_num_attention_layers=config["mha_num_attention_layers"],
                 mha_ff_dim_factor=config["mha_ff_dim_factor"],
-                late_fusion=config["late_fusion"]
+                late_fusion=config["late_fusion"],
+                per_obs_film=config["per_obs_film"],
+                use_film=config["use_film"],
+                use_transformer=config["use_transformer"],
                 )
             vision_encoder = replace_bn_with_gn(vision_encoder)
-        noise_scheduler = DDPMScheduler(
-                num_train_timesteps=config["num_diffusion_iters"],
-                beta_schedule='squaredcos_cap_v2',
-                clip_sample=True,
-                prediction_type='epsilon'
-            )
-        noise_pred_net = ConditionalUnet1D(
-                input_dim=2,
-                global_cond_dim=config["encoding_size"],
-                down_dims=config["down_dims"],
-                cond_predict_scale=config["cond_predict_scale"],
-            )
-        dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        if config["action_head"] == "diffusion":
+            noise_scheduler = DDPMScheduler(
+                    num_train_timesteps=config["num_diffusion_iters"],
+                    beta_schedule='squaredcos_cap_v2',
+                    clip_sample=True,
+                    prediction_type='epsilon'
+                )
+            if config["categorical"]:
+                action_head = ConditionalUnet1D(
+                    input_dim=2,
+                    global_cond_dim=4,
+                    down_dims=config["down_dims"],
+                    cond_predict_scale=config["cond_predict_scale"],
+                )
+            else:
+                action_head = ConditionalUnet1D(
+                        input_dim=2,
+                        global_cond_dim=config["encoding_size"],
+                        down_dims=config["down_dims"],
+                        cond_predict_scale=config["cond_predict_scale"],
+                    )
+            dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
+        elif config["action_head"] == "dense":
+            noise_scheduler = None
+            if config["categorical"]:
+                action_head = DenseNetwork_lnp(embedding_dim=4, control_horizon=config["len_traj_pred"])
+                dist_pred_network = None
+            else:
+                action_head = DenseNetwork_lnp(embedding_dim=config["encoding_size"], control_horizon=config["len_traj_pred"])
+                dist_pred_network = DenseNetwork(embedding_dim=config["encoding_size"])
         model = LNP_MM(
             vision_encoder=vision_encoder,
-            noise_pred_net=noise_pred_net,
+            action_head=action_head,
             dist_pred_net=dist_pred_network,
+            action_head_type=config["action_head"],
         ) 
         checkpoint = torch.load(model_path, map_location=lambda storage, loc: storage.cuda(0)) 
     elif config["model_type"] == "nomad":
