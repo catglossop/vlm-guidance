@@ -7,6 +7,10 @@ import threading
 from PIL import Image as PILImage
 import argparse
 import time
+import torchvision.transforms.functional as TF
+import requests
+from io import BytesIO
+import base64
 
 # ROS
 import rclpy
@@ -29,14 +33,18 @@ from train.visualizing.visualize_utils import (
     YELLOW,
     MAGENTA,
 )
-IMAGE_SIZE = (224, 224)
 from data.data_utils import IMAGE_ASPECT_RATIO
 from topic_names import (IMAGE_TOPIC,
                         WAYPOINT_TOPIC,
                         SAMPLED_ACTIONS_TOPIC, 
                         REACHED_GOAL_TOPIC)
+# CONSTANTS
+ROBOT_CONFIG_PATH ="../config/robot.yaml"
+DATA_CONFIG = "../data/data_config.yaml"
+IMAGE_SIZE = (224, 224)
+NORMALIZE = True
 
-class NavigateLocal(Node): 
+class NavigateVLA(Node): 
 
     def __init__(self, 
                 args
@@ -46,6 +54,8 @@ class NavigateLocal(Node):
         self.context_queue = []
         self.context_size = 1
         self.language_prompt = args.prompt
+        self.server_address = args.server_address
+        self.num_samples = args.num_samples
 
         # Load the config
         self.load_config(ROBOT_CONFIG_PATH)
@@ -83,11 +93,11 @@ class NavigateLocal(Node):
         self.timer_period = 1/self.RATE  # seconds
         self.timer = self.create_timer(self.timer_period, self.timer_callback)
     
-    # # Utils
-    # def unnormalize_data(self, ndata, stats):
-    #     ndata = (ndata + 1) / 2
-    #     data = ndata * (stats['max'] - stats['min']) + stats['min']
-    #     return data
+    # Utils
+    def unnormalize_data(self, ndata, stats):
+        ndata = (ndata + 1) / 2
+        data = ndata * (stats['max'] - stats['min']) + stats['min']
+        return data
 
     # def get_action(self):
     #     # diffusion_output: (B, 2*T+1, 1)
@@ -98,8 +108,18 @@ class NavigateLocal(Node):
     #     ndeltas = self.unnormalize_data(ndeltas, self.ACTION_STATS)
     #     actions = np.cumsum(ndeltas, axis=1)
     #     return torch.from_numpy(actions).to(self.device)
-    
-    def transform_images_vla(pil_imgs: List[PILImage.Image], image_size: List[int], center_crop: bool = False):
+
+    # Utility functions
+    def image_to_base64(self, image):
+        buffer = BytesIO()
+        # Convert the image to RGB mode if it's in RGBA mode
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+        image.save(buffer, format="JPEG")
+        img_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        return img_str
+
+    def transform_images_vla(self, pil_imgs: List[PILImage.Image], image_size: List[int], center_crop: bool = False):
         """Transforms a list of PIL image to a torch tensor."""
         if type(pil_imgs) != list:
             pil_imgs = [pil_imgs]
@@ -117,7 +137,7 @@ class NavigateLocal(Node):
             transf_imgs.append(transf_img)
         return np.concatenate(transf_imgs, axis=0)
     
-    def transform_images_viz(self, pil_imgs: List[PILImage.Image], image_size: List[int], center_crop: bool = False) -> torch.Tensor:
+    def transform_images_viz(self, pil_imgs: List[PILImage.Image], image_size: List[int], center_crop: bool = False):
         """Transforms a list of PIL image to a torch tensor."""
         if type(pil_imgs) != list:
             pil_imgs = [pil_imgs]
@@ -130,16 +150,15 @@ class NavigateLocal(Node):
                 else:
                     pil_img = TF.center_crop(pil_img, (int(w / IMAGE_ASPECT_RATIO), w))
             pil_img = pil_img.resize(image_size) 
-            transf_img = TF.to_tensor(pil_img)
-            transf_img = torch.unsqueeze(transf_img, 0)
-            transf_imgs.append(transf_img)
-        return torch.cat(transf_imgs, dim=1)
+            transf_imgs.append(pil_img)
+        return transf_imgs
 
     def compare_output(self):
+        print("NACTIONS: ", self.nactions)
         dataset_name = "sacson"
         traj_1 = self.nactions
         prompt_1 = self.language_prompt
-        viz_img = self.transform_images_viz(self.context_queue[-1], IMAGE_SIZE) 
+        viz_img = self.transform_images_viz(self.context_queue[-1], IMAGE_SIZE)[-1] 
         fig, ax = plt.subplots(1, 2)
         if len(traj_1.shape) > 2:
             trajs = [*traj_1]
@@ -155,9 +174,10 @@ class NavigateLocal(Node):
             point_colors=[GREEN, RED],
             traj_labels = ["gt"] + ["pred"]*(self.num_samples -1)
         )
+        ax[0].plot(trajs[0][self.args.waypoint, 0], trajs[0][self.args.waypoint, 1], color=MAGENTA, label="waypoint")
         plot_trajs_and_points_on_image(      
             ax[1],
-            np.transpose(viz_img.numpy().squeeze(0), (1,2,0)),
+            np.array(viz_img),
             dataset_name,
             trajs,
             [start_pos, goal_pos],
@@ -166,8 +186,7 @@ class NavigateLocal(Node):
         )
         ax[0].legend([prompt_1])
         ax[1].legend([prompt_1])
-        ax[0].set_ylim((-5, 5))
-        ax[0].set_xlim((-5, 15))
+
         plt.savefig("visualize.png")
 
     def load_config(self, robot_config_path):
@@ -206,19 +225,20 @@ class NavigateLocal(Node):
                 self.context_queue.append(self.image_msg)
     
     def process_images(self):
-        self.obs_images = transform_images_vla(self.context_queue, self.model_params["image_size"], center_crop=False)
+        self.obs_images = self.transform_images_vla(self.context_queue, IMAGE_SIZE, center_crop=False)
     
     def infer_actions(self):
         print("Getting VLA output")
-        obs_base64 = image_to_base64(Image.fromarray(self.context_queue))
-        req_str = server_address + str("/gen_action")
+        obs_base64 = self.image_to_base64(PILImage.fromarray(np.array(self.context_queue[-1])))
+        req_str = self.server_address + str("/gen_action")
         response = requests.post(req_str, json={'obs': obs_base64, 'prompt':self.language_prompt}, timeout=99999999)
         ndeltas = np.array(response.json()['action'])
-        self.nactions = ndeltas.reshape(-1, 2)
-        # ndeltas = self.unnormalize_data(ndeltas, self.ACTION_STATS)
-        # self.nactions = np.cumsum(ndeltas, axis=1)
+        ndeltas = ndeltas.reshape(-1, 2)
+        print("DELTA: ", ndeltas)
+        self.nactions = np.cumsum(ndeltas, axis=0)
+        print("NACTIONS: ", self.nactions)
+        # self.nactions -= self.nactions[0, :]
         self.naction = self.nactions
-
         self.sampled_actions_msg = Float32MultiArray()
         self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.nactions.flatten())).tolist()
         self.sampled_actions_pub.publish(self.sampled_actions_msg)
@@ -246,24 +266,30 @@ class NavigateLocal(Node):
             print("Compare time: ", time.time() - start_viz_time)
 
         # Normalize and publish waypoint
-        if self.model_params["normalize"]:
-            self.chosen_waypoint[:2] *= (self.MAX_V / self.RATE)  
+        if NORMALIZE:
+            self.naction[:,:2] *= (self.MAX_V / self.RATE)*-1
+            self.chosen_waypoint[:2] *= (self.MAX_V / self.RATE)*-1
         print("Chosen waypoint shape: ", self.chosen_waypoint.shape)
         print("Chosen waypoint: ", self.chosen_waypoint)
-        self.waypoint_msg.data = self.chosen_waypoint.tolist()
+        # self.waypoint_msg.data = self.chosen_waypoint.tolist()
+        # self.waypoint_pub.publish(self.waypoint_msg)
         self.execute = 0
-        # while self.execute < self.args.waypoint:
-        self.waypoint_pub.publish(self.waypoint_msg)
-        # self.execute += 1
-        # time.sleep(self.timer_period)
-        # self.blank_msg = Float32MultiArray()
-        # self.blank_msg.data = np.zeros(4, dtype=np.float32).tolist()
-        # self.waypoint_pub.publish(self.blank_msg)
+        while self.execute < self.args.waypoint:
+            self.waypoint = self.naction[self.execute, :]
+            self.waypoint_msg.data = self.waypoint.tolist()
+            self.waypoint_pub.publish(self.waypoint_msg)
+            time.sleep(self.timer_period)
+            self.execute += 1
+        time.sleep(self.timer_period)
+        self.blank_msg = Float32MultiArray()
+        self.blank_msg.data = np.zeros(4, dtype=np.float32).tolist()
+        self.waypoint_pub.publish(self.blank_msg)
         print("Elapsed time: ", time.time() - start )
 
 def main(args):
+
     rclpy.init()
-    nav_policy = NavigateLocal(args)
+    nav_policy = NavigateVLA(args)
 
     rclpy.spin(nav_policy)
     nav_policy.destroy_node()
@@ -278,7 +304,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--waypoint",
         "-w",
-        default=2, # close waypoints exihibit straight line motion (the middle waypoint is a good default)
+        default=4, # close waypoints exihibit straight line motion (the middle waypoint is a good default)
         type=int,
         help=f"""index of the waypoint used for navigation (between 0 and 4 or 
         how many waypoints your model predicts) (default: 2)""",
