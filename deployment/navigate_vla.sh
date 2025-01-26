@@ -17,7 +17,7 @@ tmux splitw -v -p 50 # split it into two halves
 tmux select-pane -t 0
 tmux send-keys "source ~/create_ws/install/setup.bash" Enter
 tmux send-keys "conda activate hi_learn" Enter
-tmux send-keys "launch/launch_robot.sh" Enter  
+tmux send-keys "launch/launch_robot_wout_lidar.sh" Enter  
 
 # Run the navigate.py script with command line args in the second pane
 tmux select-pane -t 1

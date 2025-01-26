@@ -11,6 +11,7 @@ import torchvision.transforms.functional as TF
 import requests
 from io import BytesIO
 import base64
+import cv2
 
 # ROS
 import rclpy
@@ -56,6 +57,7 @@ class NavigateVLA(Node):
         self.language_prompt = args.prompt
         self.server_address = args.server_address
         self.num_samples = args.num_samples
+        self.step = 0
 
         # Load the config
         self.load_config(ROBOT_CONFIG_PATH)
@@ -72,6 +74,11 @@ class NavigateVLA(Node):
             1)
         
         # PUBLISHERS
+        self.viz_msg = Image()
+        self.viz_pub = self.create_publisher(
+            Image, 
+            "/viz_image", 
+            1)
         self.reached_goal = False
         self.reached_goal_msg = Bool()
         self.reached_goal_pub = self.create_publisher(
@@ -165,7 +172,7 @@ class NavigateVLA(Node):
         else:
             trajs = [traj_1]
         start_pos = np.array([0,0])
-        goal_pos = np.array([0,0])
+        goal_pos = traj_1[-1,:]
         plot_trajs_and_points(
             ax[0], 
             trajs,
@@ -186,6 +193,7 @@ class NavigateVLA(Node):
         )
         ax[0].legend([prompt_1])
         ax[1].legend([prompt_1])
+        plt.title(f"Step: {self.step}")
 
         plt.savefig("visualize.png")
 
@@ -225,7 +233,7 @@ class NavigateVLA(Node):
                 self.context_queue.append(self.image_msg)
     
     def process_images(self):
-        self.obs_images = self.transform_images_vla(self.context_queue, IMAGE_SIZE, center_crop=False)
+        self.obs_images = self.transform_images_vla(self.context_queue, IMAGE_SIZE, center_crop=True)
     
     def infer_actions(self):
         print("Getting VLA output")
@@ -235,9 +243,11 @@ class NavigateVLA(Node):
         ndeltas = np.array(response.json()['action'])
         ndeltas = ndeltas.reshape(-1, 2)
         print("DELTA: ", ndeltas)
+        self.nactions = ndeltas
         self.nactions = np.cumsum(ndeltas, axis=0)
+        self.nactions -= self.nactions[0, :]
+        self.nactions[:,0] *= -1
         print("NACTIONS: ", self.nactions)
-        # self.nactions -= self.nactions[0, :]
         self.naction = self.nactions
         self.sampled_actions_msg = Float32MultiArray()
         self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.nactions.flatten())).tolist()
@@ -249,7 +259,6 @@ class NavigateVLA(Node):
         start = time.time()
         self.chosen_waypoint = np.zeros(4, dtype=np.float32)
         if len(self.context_queue) >= self.context_size:
-
             # Process observations
             start_image_time = time.time()
             self.process_images()
@@ -264,27 +273,33 @@ class NavigateVLA(Node):
             start_viz_time = time.time()
             self.compare_output()
             print("Compare time: ", time.time() - start_viz_time)
+            self.step += 1
 
         # Normalize and publish waypoint
-        if NORMALIZE:
-            self.naction[:,:2] *= (self.MAX_V / self.RATE)*-1
-            self.chosen_waypoint[:2] *= (self.MAX_V / self.RATE)*-1
-        print("Chosen waypoint shape: ", self.chosen_waypoint.shape)
-        print("Chosen waypoint: ", self.chosen_waypoint)
-        # self.waypoint_msg.data = self.chosen_waypoint.tolist()
-        # self.waypoint_pub.publish(self.waypoint_msg)
-        self.execute = 0
-        while self.execute < self.args.waypoint:
-            self.waypoint = self.naction[self.execute, :]
-            self.waypoint_msg.data = self.waypoint.tolist()
-            self.waypoint_pub.publish(self.waypoint_msg)
+        if self.naction is not None:
+            if NORMALIZE:
+                self.naction[:,:2] *= (self.MAX_V / self.RATE)
+                self.chosen_waypoint[:2] *= (self.MAX_V / self.RATE)
+            print("Chosen waypoint shape: ", self.chosen_waypoint.shape)
+            print("Chosen waypoint: ", self.chosen_waypoint)
+            self.execute = 0
+            while self.execute < self.args.waypoint:
+                self.waypoint = self.naction[self.execute, :]
+                self.waypoint_msg.data = self.waypoint.tolist()
+                self.waypoint_pub.publish(self.waypoint_msg)
+                time.sleep(self.timer_period)
+                self.execute += 1
             time.sleep(self.timer_period)
-            self.execute += 1
-        time.sleep(self.timer_period)
-        self.blank_msg = Float32MultiArray()
-        self.blank_msg.data = np.zeros(4, dtype=np.float32).tolist()
-        self.waypoint_pub.publish(self.blank_msg)
+            self.blank_msg = Float32MultiArray()
+            self.blank_msg.data = np.zeros(4, dtype=np.float32).tolist()
+            self.waypoint_pub.publish(self.blank_msg)
+            viz_image = PILImage.open("visualize.png").convert("RGB")
+            viz_image = cv2.cvtColor(np.array(viz_image), cv2.COLOR_RGB2BGR)
+            viz_image = self.bridge.cv2_to_imgmsg(np.array(viz_image), "passthrough")
+            self.viz_pub.publish(viz_image)
+        self.naction = None
         print("Elapsed time: ", time.time() - start )
+        self.context_queue = []
 
 def main(args):
 

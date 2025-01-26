@@ -11,8 +11,6 @@ tmux selectp -t 0
 tmux splitw -v -p 50
 tmux selectp -t 2
 tmux splitw -v -p 50
-tmux selectp -t 2
-tmux splitw -h -p 50
 
 # Launch the camera
 tmux select-pane -t 0
@@ -26,14 +24,14 @@ tmux send-keys "conda activate hi_learn" Enter
 tmux send-keys "source ~/create_ws/install/setup.bash" Enter
 tmux send-keys "ros2 launch teleop_twist_joy teleop-launch.py joy_config:=xbox" Enter
 
-# Launch lidar
-tmux select-pane -t 2
-tmux send-keys "conda activate hi_learn" Enter
-tmux send-keys "source ~/create_ws/install/setup.bash" Enter
-tmux send-keys "ros2 launch rplidar_ros rplidar_s1_launch.py frame_id:='laser_link'" Enter
+# # Launch lidar
+# tmux select-pane -t 2
+# tmux send-keys "conda activate hi_learn" Enter
+# tmux send-keys "source ~/create_ws/install/setup.bash" Enter
+# tmux send-keys "ros2 launch rplidar_ros rplidar_s1_launch.py frame_id:='laser_link'" Enter
 
 # Publish static transform
-tmux select-pane -t 3
+tmux select-pane -t 2
 tmux send-keys "conda activate hi_learn" Enter
 tmux send-keys "source ~/create_ws/install/setup.bash" Enter
 tmux send-keys "ros2 service call /reset_pose irobot_create_msgs/srv/ResetPose '{}'" Enter
