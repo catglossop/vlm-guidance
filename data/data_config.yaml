@@ -63,6 +63,18 @@ carla:
 sacson_labelled:
   metric_waypoint_spacing: 0.255
 
+tartan_drive_labelled:
+  metric_waypoint_spacing: 0.72
+
+recon_labelled:
+  metric_waypoint_spacing: 0.25
+
+seattle_labelled:
+  metric_waypoint_spacing: 0.35
+
+go_stanford2_labelled:
+  metric_waypoint_spacing: 0.12
+
 sacson:
   metric_waypoint_spacing: 0.255
 

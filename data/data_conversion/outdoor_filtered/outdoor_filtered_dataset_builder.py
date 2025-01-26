@@ -11,7 +11,8 @@ from PIL import Image
 
 RESIZE = (128, 128)
 
-class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
+
+class OutdoorFilteredDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
     VERSION = tfds.core.Version('1.0.0')
@@ -88,7 +89,7 @@ class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
                         dtype=np.bool_,
                         doc='True on last step of the episode if it is a terminal step, True for demos.'
                     ),
-                   'language_instruction': tfds.features.Tensor(
+                    'language_instruction': tfds.features.Tensor(
                         shape=(10,),
                         dtype=tf.string,
                         doc='Language Instruction.'
@@ -108,8 +109,8 @@ class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='/hdd/cf_v2_dataset/train'),
-            'val': self._generate_examples(path='/hdd/cf_v2_dataset/val'),
+            'train': self._generate_examples(path='/hdd/outdoor_labelled/train'),
+            # 'val': self._generate_examples(path='/hdd/outdoor_labelled/val'),
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:
@@ -159,10 +160,7 @@ class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
 
 
         def _process_image(path, mode='stretch'):
-            try:
-                img = Image.open(path)
-            except:
-                img = Image.new('RGB', RESIZE, (255, 255, 255))
+            img = Image.open(path)
             if mode == 'stretch':
                 img = img.resize(RESIZE)
             elif mode == 'crop':
@@ -175,6 +173,41 @@ class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
                 img = img.crop((left, top, right, bottom))
             
             return np.asarray(img, dtype='uint8')
+
+        def _compute_actions(traj_data, curr_time, goal_time, len_traj_pred=1, waypoint_spacing=1, learn_angle=True, normalize=False):
+            start_index = curr_time
+            end_index = curr_time + len_traj_pred * waypoint_spacing + 1
+            yaw = traj_data["yaw"][start_index:end_index:waypoint_spacing]
+            positions = traj_data["position"][start_index:end_index:waypoint_spacing]
+            goal_pos = traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)]
+
+            if len(yaw.shape) == 2:
+                yaw = yaw.squeeze(1)
+
+            if yaw.shape != (len_traj_pred + 1,):
+                const_len = len_traj_pred + 1 - yaw.shape[0]
+                yaw = np.concatenate([yaw, np.repeat(yaw[-1], const_len)])
+                positions = np.concatenate([positions, np.repeat(positions[-1][None], const_len, axis=0)], axis=0)
+
+            assert yaw.shape == (len_traj_pred + 1,), f"{yaw.shape} and {(len_traj_pred + 1,)} should be equal"
+            assert positions.shape == (len_traj_pred + 1, 2), f"{positions.shape} and {(len_traj_pred + 1, 2)} should be equal"
+
+            waypoints = _to_local_coords(positions, positions[0], yaw[0])
+            goal_pos = _to_local_coords(goal_pos, positions[0], yaw[0])
+
+            assert waypoints.shape == (len_traj_pred + 1, 2), f"{waypoints.shape} and {(len_traj_pred + 1, 2)} should be equal"
+
+            if learn_angle:
+                yaw = yaw[1:] - yaw[0]
+                actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1)
+            else:
+                actions = waypoints[1:]
+
+            if normalize:
+                actions[:, :2] /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
+                goal_pos /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
+
+            return actions, goal_pos
         
         def _parse_language(language_instruction):
             if type(language_instruction) == list:
@@ -196,51 +229,12 @@ class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
                     return None
             return language_instruction
 
-        def _compute_actions(traj_data, curr_time, goal_time, len_traj_pred=1, waypoint_spacing=1, learn_angle=True, normalize=False):
-            start_index = curr_time
-            end_index = curr_time + len_traj_pred * waypoint_spacing + 1
-            yaw = traj_data["yaw"][start_index:end_index:waypoint_spacing]
-            positions = traj_data["position"][start_index:end_index:waypoint_spacing]
-            goal_pos = traj_data["position"][min(goal_time, len(traj_data["position"]) - 1)]
-
-            if len(yaw.shape) == 2:
-                yaw = yaw.squeeze(1)
-
-            if yaw.shape != (len_traj_pred + 1,):
-                const_len = len_traj_pred + 1 - yaw.shape[0]
-                yaw = np.concatenate([yaw, np.repeat(yaw[-1], const_len)])
-                positions = np.concatenate([positions, np.repeat(positions[-1][None], const_len, axis=0)], axis=0)
-            yaw = yaw[:len_traj_pred + 1]
-            positions = positions[:len_traj_pred + 1]
-            assert yaw.shape == (len_traj_pred + 1,), f"{yaw.shape} and {(len_traj_pred + 1,)} should be equal"
-            assert positions.shape == (len_traj_pred + 1, 2), f"{positions.shape} and {(len_traj_pred + 1, 2)} should be equal"
-
-            waypoints = _to_local_coords(positions, positions[0], yaw[0])
-            goal_pos = _to_local_coords(goal_pos, positions[0], yaw[0])
-
-            assert waypoints.shape == (len_traj_pred + 1, 2), f"{waypoints.shape} and {(len_traj_pred + 1, 2)} should be equal"
-
-            if learn_angle:
-                yaw = yaw[1:] - yaw[0]
-                actions = np.concatenate([waypoints[1:], yaw[:, None]], axis=-1)
-            else:
-                actions = waypoints[1:]
-
-            if normalize:
-                actions[:, :2] /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
-                goal_pos /= self.data_config["metric_waypoint_spacing"] * self.waypoint_spacing
-
-            return actions, goal_pos
-
         def _parse_example(episode):
             episode_path, episode_id = episode
             # load raw data --> this should change for your dataset
             data_path = os.path.join(episode_path, 'traj_data_filtered.pkl')
             data = np.load(data_path, allow_pickle=True)     # this is a list of dicts in our case
-            if type(data["yaw"]) == list:
-                data["yaw"] = np.array(data["yaw"])
-            if data["position"].shape[0] < data["yaw"].shape[0]:
-                data["yaw"] = data["yaw"][:data["position"].shape[0]]
+
             # assemble episode --> here we're assuming demos so we set reward to 1 at the end
             samples = []
             successes = []
@@ -250,7 +244,6 @@ class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
                 # compute Kona language embedding
                 language_instructions = [_parse_language(lang["traj_description"]) for lang in data['language_annotations']]
                 language_instructions = [lang for lang in language_instructions if lang is not None]
-                
                 if len(language_instructions) > 10:
                     language_instructions = language_instructions[:10]
                 else:
@@ -266,7 +259,7 @@ class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
                 state = np.concatenate((position, yaw))
                 yaw_rotmat = _yaw_rotmat(yaw[0])
 
-                # Recover action(s)
+                #Recover action(s)
                 action, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
                     waypoint_spacing=1, learn_angle=False, normalize=False) 
                 action_angle, goal_pos = _compute_actions(data, i, i+1, len_traj_pred=1,
@@ -326,4 +319,3 @@ class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
         #         beam.Create(episodes)
         #         | beam.Map(_parse_example)
         # )
-

@@ -1,0 +1,5 @@
+navila_model: 
+  config_path: "atomic.yaml"
+  ckpt_path: "navila_atomic_model.pth"
+
+

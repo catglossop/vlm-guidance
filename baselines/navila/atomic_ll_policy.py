@@ -14,8 +14,10 @@ import clip
 from torchvision import transforms
 import torchvision.transforms.functional as TF
 import tensorflow_hub as hub
-# import tensorflow_text
 from transformers import T5EncoderModel, T5Tokenizer
+import requests 
+import base64
+from io import BytesIO
 
 # ROS
 import rclpy
@@ -48,38 +50,34 @@ from topic_names import (IMAGE_TOPIC,
                         REACHED_GOAL_TOPIC)
 
 # CONSTANTS
-ROBOT_CONFIG_PATH ="../config/robot.yaml"
-MODEL_CONFIG_PATH = "../config/models.yaml"
-DATA_CONFIG = "../data/data_config.yaml"
+ROBOT_CONFIG_PATH ="../../config/robot.yaml"
+MODEL_CONFIG_PATH = "../../config/models.yaml"
+DATA_CONFIG = "../../data/data_config.yaml"
 
-class NavigateLocal(Node): 
+class AtomicLLPolicy(Node): 
 
     def __init__(self, 
                 args
                 ):
-        super().__init__('navigate_local')
+        super().__init__('navigate_atomic')
         self.args = args
         self.context_queue = []
         self.num_samples = args.num_samples
-        
         self.language_prompt = args.prompt
+        self.sever_address = args.server_address
 
         # Load the config
         self.load_config(ROBOT_CONFIG_PATH)
 
         # Load the model 
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        self.model_type = args.model_type
         print("Using device:", self.device)
-        self.load_model_from_config(MODEL_CONFIG_PATH, args.model_type)
+        self.load_model_from_config("navlia_model.yaml", "navila_model")
         self.language_encoder = self.model_params["language_encoder"]
         self.context_size = self.model_params["context_size"]
 
-        # self.clip_model, self.preprocess = clip.load(self.clip_model_type, device=self.device)
-        # self.language_embedding =  clip.tokenize(self.language_prompt).to(self.device)
-        # self.language_embedding = self.clip_model.encode_text(self.language_embedding).to(torch.float)
+        # Load language encoder
         self.load_language_encoder(self.language_encoder)
-        self.embed_language(self.language_prompt)
  
         # Load data config
         self.load_data_config()
@@ -93,12 +91,6 @@ class NavigateLocal(Node):
             1)
         
         # PUBLISHERS
-        self.reached_goal = False
-        self.reached_goal_msg = Bool()
-        self.reached_goal_pub = self.create_publisher(
-            Bool, 
-            REACHED_GOAL_TOPIC, 
-            1)
         self.sampled_actions_msg = Float32MultiArray()
         self.sampled_actions_pub = self.create_publisher(
             Float32MultiArray, 
@@ -143,10 +135,11 @@ class NavigateLocal(Node):
         transf_imgs = []
         for pil_img in pil_imgs:
             w, h = pil_img.size
-            if w > h:
-                pil_img = TF.center_crop(pil_img, (h, int(h * IMAGE_ASPECT_RATIO)))  # crop to the right ratio
-            else:
-                pil_img = TF.center_crop(pil_img, (int(w / IMAGE_ASPECT_RATIO), w))
+            if center_crop:
+                if w > h:
+                    pil_img = TF.center_crop(pil_img, (h, int(h * IMAGE_ASPECT_RATIO)))  # crop to the right ratio
+                else:
+                    pil_img = TF.center_crop(pil_img, (int(w / IMAGE_ASPECT_RATIO), w))
             pil_img = pil_img.resize(image_size) 
             transf_img = TF.to_tensor(pil_img)
             transf_img = torch.unsqueeze(transf_img, 0)
@@ -187,30 +180,16 @@ class NavigateLocal(Node):
         ax[0].set_ylim((-5, 5))
         ax[0].set_xlim((-5, 15))
         plt.savefig("visualize.png")
+
     def load_language_encoder(self, language_encoder):
-        if language_encoder == "clip":
-            print("Loading CLIP model")
-            self.clip_model, self.preprocess = clip.load("ViT-B/32", device=self.device)
-        elif language_encoder == "google":
-            print("Loading Google model")
-            self.google_model = hub.load("https://tfhub.dev/google/universal-sentence-encoder-multilingual/3")
-        elif language_encoder == "t5":
-            print("Loading T5 model")
-            self.tokenizer = T5Tokenizer.from_pretrained("google-t5/t5-small")
-            self.t5_model = T5EncoderModel.from_pretrained("google-t5/t5-small")
-        else:
-            raise ValueError(f"Language encoder {language_encoder} not supported")
+        print("Loading T5 model")
+        self.tokenizer = T5Tokenizer.from_pretrained("google-t5/t5-small")
+        self.t5_model = T5EncoderModel.from_pretrained("google-t5/t5-small")
+
     def embed_language(self, language_prompt):
-        if self.language_encoder == "clip":
-            self.language_embedding = clip.tokenize(language_prompt).to(self.device)
-            self.language_embedding = self.clip_model.encode_text(self.language_embedding).to(torch.float)
-        elif self.language_encoder == "google":
-            self.language_embedding = self.google_model(language_prompt)
-        elif self.language_encoder == "t5":
-            self.language_embedding = self.tokenizer(language_prompt, return_tensors="pt", padding=True)
-            self.language_embedding = self.t5_model(self.language_embedding["input_ids"]).last_hidden_state.mean(dim=1).to(self.device)
-        else:
-            raise ValueError(f"Language encoder {self.language_encoder} not supported")
+        self.language_embedding = self.tokenizer(language_prompt, return_tensors="pt", padding=True)
+        self.language_embedding = self.t5_model(self.language_embedding["input_ids"]).last_hidden_state.mean(dim=1).to(self.device)
+
     def load_config(self, robot_config_path):
         with open(robot_config_path, "r") as f:
             robot_config = yaml.safe_load(f)
@@ -237,15 +216,13 @@ class NavigateLocal(Node):
             print(f"Loading model from {self.ckpth_path}")
         else:
             raise FileNotFoundError(f"Model weights not found at {self.ckpth_path}")
-        if self.model_params["action_head"] == "diffusion": 
-            self.noise_scheduler = DDPMScheduler(
-                    num_train_timesteps=self.model_params["num_diffusion_iters"],
-                    beta_schedule='squaredcos_cap_v2',
-                    clip_sample=True,
-                    prediction_type='epsilon'
-                )
-        else:
-            self.noise_scheduler = None
+        
+        self.noise_scheduler = DDPMScheduler(
+                num_train_timesteps=self.model_params["num_diffusion_iters"],
+                beta_schedule='squaredcos_cap_v2',
+                clip_sample=True,
+                prediction_type='epsilon'
+            )
         self.model = load_model(
             self.ckpth_path,
             self.model_params,
@@ -277,47 +254,50 @@ class NavigateLocal(Node):
                 self.context_queue.append(self.image_msg)
     
     def process_images(self):
+        self.viz_img = self.context_queue[-1].clone()
+
         self.obs_images = transform_images(self.context_queue, self.model_params["image_size"], center_crop=False)
         self.obs_images = torch.split(self.obs_images, 3, dim=1)
         self.obs_images = torch.cat(self.obs_images, dim=1) 
         self.obs_images = self.obs_images.to(self.device)
         self.mask = torch.zeros(1).long().to(self.device)  
+
+    def image_to_base64(self, image):
+        buffer = BytesIO()
+        # Convert the image to RGB mode if it's in RGBA mode
+        if image.mode == 'RGBA':
+            image = image.convert('RGB')
+        image.save(buffer, format="JPEG")
+        img_str = base64.b64encode(buffer.getvalue()).decode("utf-8")
+        return img_str
     
     def infer_actions(self):
-        if self.model_type == "rft":
-            # Get early fusion obs goal for conditioning
-            self.nactions = self.model(self.obs_images.clone(), self.language_embedding.clone())
-            self.nactions = np.array(self.get_action().detach().cpu().numpy())
-            self.sampled_actions_msg = Float32MultiArray()
-            self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.naction.flatten())).tolist()
-            self.sampled_actions_pub.publish(self.sampled_actions_msg)
-            self.naction = self.nactions[0] 
-            self.chosen_waypoint = self.naction[self.args.waypoint] 
-        else:
-            # if ("_").join(self.model_type.split("_")[:2]) == "lelan_mm":
-            mask_image = False
-            goal_img = torch.zeros((1, 3, 96, 96)).to(self.device)
-            # else:
-            #     goal_img = None
-            self.nactions = model_output_diffusion_eval(self.model, 
-                                                       self.noise_scheduler, 
-                                                       self.obs_images.clone(), 
-                                                       self.language_embedding.clone(), 
-                                                       self.language_prompt,
-                                                       goal_img,
-                                                       self.model_params["len_traj_pred"], 
-                                                       2, 
-                                                       self.num_samples, 
-                                                       1, 
-                                                       self.device, 
-                                                       mask_image, 
-                                                       self.model_params["categorical"])["actions"].detach().cpu().numpy()
-            self.sampled_actions_msg = Float32MultiArray()
-            self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.nactions.flatten())).tolist()
-            print("Sampled actions shape: ", self.nactions.shape)
-            self.sampled_actions_pub.publish(self.sampled_actions_msg)
-            self.naction = self.nactions[0] 
-            self.chosen_waypoint = self.naction[self.args.waypoint] 
+
+        # First send the image to the VLM to get the next action 
+        obs_base64 = image_to_base64(self.viz_img)
+        req_str = self.sever_address + str("/suggest_action")
+        response = requests.post(req_str, json={"image": obs_base64, "prompt": self.language_prompt})
+
+        lang_action = response.json()["action"]
+        lang_action_embed = self.embed_language(lang_action)
+
+        self.nactions = model_output_diffusion_eval(self.model, 
+                                                    self.noise_scheduler, 
+                                                    self.obs_images.clone(), 
+                                                    lang_action_embed.clone(), 
+                                                    None,
+                                                    self.model_params["len_traj_pred"], 
+                                                    2, 
+                                                    self.num_samples, 
+                                                    1, 
+                                                    self.device, 
+                                                    mask_image)["actions"].detach().cpu().numpy()
+        self.sampled_actions_msg = Float32MultiArray()
+        self.sampled_actions_msg.data = np.concatenate((np.array([0]), self.nactions.flatten())).tolist()
+        print("Sampled actions shape: ", self.nactions.shape)
+        self.sampled_actions_pub.publish(self.sampled_actions_msg)
+        self.naction = self.nactions[0] 
+        self.chosen_waypoint = self.naction[self.args.waypoint] 
         
 
     def timer_callback(self):
@@ -393,10 +373,17 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--prompt",
-        "-p", 
+        "-p",
         default="Go to the kitchen",
         type=str,
-        help="Prompt for the policy",
+        help="Prompt for the language model",
+    )
+    parser.add_argument(
+        "--server-address",
+        "-s",
+        default="http://localhost:5000",
+        type=str,
+        help="Server address for the VLM",
     )
     args = parser.parse_args()
     main(args)

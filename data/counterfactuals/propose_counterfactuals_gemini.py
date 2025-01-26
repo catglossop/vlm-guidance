@@ -411,10 +411,8 @@ def main(args):
     os.makedirs(config["counterfactuals_output"], exist_ok=True)
 
     # Load VLM 
-    OPENAI_KEY = os.environ.get("OPENAI_API_KEY")
-    ORGANIZATION_ID = os.environ.get("OPENAI_ORG_ID")
-    print(OPENAI_KEY, ORGANIZATION_ID)
-    client = OpenAI(api_key=OPENAI_KEY,organization = ORGANIZATION_ID)
+    genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
+    client = genai.GenerativeModel(model_name="gemini-1.5-flash")
 
     # Load atomic model
     checkpoint_path = os.path.join(config["model_path"], f"{config['checkpoint']}.pth")
@@ -435,14 +433,16 @@ def main(args):
     for path in paths:
         print(path)
 
-        cf_folder = config["counterfactuals_output"] + f"/{path.split('/')[-1]}_cf_0"
+        cf_folders = glob.glob(config["counterfactuals_output"] + f"/{path.split('/')[-1]}_cf_*")
         cf_old_folders = glob.glob(config["counterfactuals_output"].replace("cf_dataset_v3", "cf_dataset_v2") + f"/{path.split('/')[-1]}_cf_*")
         not_edited_all = []
         for cf_old_folder in cf_old_folders:
             mtimes = [time.ctime(os.path.getmtime(path)) for path in glob.glob(cf_old_folder + "/*")]
             not_edited = ["Jan 22" not in mtime for mtime in mtimes]
             not_edited_all.append(all(not_edited))
-        if os.path.exists(cf_folder) or all(not_edited_all):
+        print(f"NUM CF FOLDERS: {len(cf_folders)}")
+        print(f"Num CF folders old: {len(cf_old_folders)}")
+        if len(cf_folders) >= 1 or (all(not_edited_all) and len(cf_old_folders) >= 1):
             print("Already processed")
             continue
 
@@ -490,23 +490,25 @@ def main(args):
         # print(check_prompt)
 
         # Ask the VLM about the best and new instructions
-        context = []
-        context.append({
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{image_base64}",
-                            },
-                        })
-        context.append(check_prompt)
+        contents = []
+        contents.append({"role": "user",
+                                        "parts": [
+                                            {
+                                                "text": check_prompt,
+                                            },
+                                            {
+                                                "inline_data" : {
+                                                    "mime_type" : "image/jpeg",
+                                                    "data": image_base64
+                                                }
+                                            }
+                                        ]
+                            })
 
-        message = {"role": "user", "content": context}
-        message_history = [message]
-        response = client.chat.completions.create(
-                model='gpt-4o-mini',
-                messages=message_history,
-            )
-        output = response.choices[0].message.content
-        instruct_json = json.loads(output.lstrip("```json").rstrip("```").strip("\n").strip(" "))
+        response = client.generate_content(contents)
+
+        output = response.text
+        instruct_json = json.loads(output.lstrip("```json").rstrip("\n").rstrip("```").strip("\n"))
         filtered_lang = [best_lang for best_lang in instruct_json["best"]] + [new_lang for new_lang in instruct_json["new"]]
         print("Filtered lang: ", filtered_lang)
 
@@ -515,26 +517,21 @@ def main(args):
         new_prompt=f"A robot is moving through an environment and has performed a certain trajectory. The trajectory can be described by the sequence of low level actions taken by the robot are {labels} and the high level instructions that have been proposed to be associated with the trajectory are {filtered_lang}. The provided images are the first person image observations taken by the robot at the beginning on each low level action. Given this information, propose a different trajectory the robot could have taken to interact with the environment in a different way. First, observation what objects and structures are present and their locations relative to the robot in the scene. For example, is the robot is in a hall, it can travel along the walls or in the center, so you may note if there are walls and on which sides of the robot. Another example is that the robot could move to a specifc object in the scene, and therefore note where different objects are relative to the robot. Enumerate several different alternatives. Only propose short horizon alternatives and provide specific information about the task. Give the previous low level action and its index in the low level actions list from which the trajectory should take an alternative path and then low level action, from the list: ['Turn left', 'Turn right', 'Go forward', 'Stop', 'Adjust left', 'Adjust right'] which performs the alternative path. Your output should be in the form of json objects  which is a list of objects each with a field for the trajectory and a field for reasoning. For example, if the input low level actions are ['Go forward', 'Go forward', 'Turn left'], the original instruction was 'Move towards the door on the left' then a potential output could be : '['prev_action' : ['Go forward', 1], 'proposed_action' : 'Turn right', 'new_instruction' : ' Move away from the door on the left' 'reasoning': 'The robot could try instead moving away from the door on the left to explore the room further. This would be a good alternative to the original instruction.'"
 
         # Ask the VLM about the best and new instructions
-        context = []
+        contents = {"role": "user", "parts": [{"text" : new_prompt}]}
         for ll_base64 in ll_context:
-            context.append({
-                                "type": "image_url",
-                                "image_url": {
-                                    "url": f"data:image/jpeg;base64,{ll_base64}",
-                                },
-                            })
-        context.append(new_prompt)
+            contents["parts"].append({
+                                        "inline_data" : {
+                                            "mime_type" : "image/jpeg",
+                                            "data": ll_base64,
+                                        }
+                                    })
+        contents = [contents]
 
-        message = {"role": "user", "content": context}
-        message_history = [message]
         tries = 0
         while tries < 10:
             try:
-                response = client.chat.completions.create(
-                        model='gpt-4o-mini',
-                        messages=message_history,
-                    )
-                output = response.choices[0].message.content
+                response = client.generate_content(contents)
+                output = response.text
                 output = output.split("```json")
                 cf_json = []
                 for o in output:
@@ -609,22 +606,22 @@ def main(args):
                     cf_trajs.append(cf_traj)
 
                 # Plot both trajs
-                os.makedirs("viz", exist_ok=True)
-                plt.close()
-                fig, ax = plt.subplots(1,2)
-                for i in range(len(cf_trajs)):
-                    ax[0].plot(cf_trajs[i][:,0], cf_trajs[i][:,1])
-                ax[0].plot(traj_data["position"][:,0], traj_data["position"][:,1], label="Original", color="red")
-                ax[0].scatter(traj_data["position"][0,0], traj_data["position"][0,1], c='g')
-                ax[0].scatter(traj_data["position"][-1,0], traj_data["position"][-1,1], c='b')
-                ax[0].set_title(f"Counterfactual Trajectory: {proposed_action}")
+                # os.makedirs("viz", exist_ok=True)
+                # plt.close()
+                # fig, ax = plt.subplots(1,2)
+                # for i in range(len(cf_trajs)):
+                #     ax[0].plot(cf_trajs[i][:,0], cf_trajs[i][:,1])
+                # ax[0].plot(traj_data["position"][:,0], traj_data["position"][:,1], label="Original", color="red")
+                # ax[0].scatter(traj_data["position"][0,0], traj_data["position"][0,1], c='g')
+                # ax[0].scatter(traj_data["position"][-1,0], traj_data["position"][-1,1], c='b')
+                # ax[0].set_title(f"Counterfactual Trajectory: {proposed_action}")
 
-                ax[1].imshow(viz_context.squeeze().permute(1,2,0))
-                ax[1].set_title("Context")
-                plot_name = ('_').join(cf['new_instruction'].lower().split(' '))
-                if os.path.exists(f"viz/cf_traj_{plot_name}.jpg"):
-                    os.remove(f"viz/cf_traj_{plot_name}.jpg")
-                plt.savefig(f"viz/cf_traj_{plot_name}.jpg")
+                # ax[1].imshow(viz_context.squeeze().permute(1,2,0))
+                # ax[1].set_title("Context")
+                # plot_name = ('_').join(cf['new_instruction'].lower().split(' '))
+                # if os.path.exists(f"viz/cf_traj_{plot_name}.jpg"):
+                #     os.remove(f"viz/cf_traj_{plot_name}.jpg")
+                # plt.savefig(f"viz/cf_traj_{plot_name}.jpg")
 
                 # Save the counterfactuals to a new folder
                 cf_folder = config["counterfactuals_output"] + f"/{path.split('/')[-1]}_cf_{cf_idx}"

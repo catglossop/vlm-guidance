@@ -1,0 +1,472 @@
+project_name: lcbc
+run_name: atomic
+
+# training setup
+use_wandb: True # set to false if you don't want to log to wandb
+train: True
+batch_size: 128
+epochs: 200
+gpu_ids: [0]
+all_gpu_ids: [0,1]
+num_workers: 12
+lr: 1e-4
+optimizer: adamw
+clipping: False
+max_norm: 1.
+scheduler: "cosine"
+warmup: True 
+warmup_epochs: 4
+cyclic_period: 10
+plateau_patience: 3
+plateau_factor: 0.5
+seed: 0
+
+# model params
+model: lnp
+model_type: lnp_multi_modal
+action_head: diffusion
+language_encoder: t5
+vision_encoder: lnp_multi_modal
+efficientnet_model: efficientnet-b2
+encoding_size: 256
+obs_encoding_size: 1024
+lang_encoding_size: 512
+obs_encoder: efficientnet-b0
+mha_num_attention_heads: 4
+mha_num_attention_layers: 4
+mha_ff_dim_factor: 4
+vocab_size: 128
+num_tokens: 8
+dropout: 0.5
+attn_unet: False
+cond_predict_scale: False
+down_dims: [64, 128, 256]
+num_diffusion_iters: 15
+linear_output: False
+goal_mask_prob: 0.0
+late_fusion: False
+per_obs_film: False
+use_film: True
+categorical: False
+use_transformer: True
+unconditional_prob: 0.3
+
+# normalization for the action space
+normalize: True
+
+# context
+context_type: temporal
+context_size: 2 # 5
+alpha: 0.01
+
+# distance bounds for distance and action and distance predictions 
+distance:
+  min_dist_cat: 0
+  max_dist_cat: 25
+action:
+  min_dist_cat: 2
+  max_dist_cat: 25
+
+# action output params
+len_traj_pred: 8
+learn_angle: False
+
+# dataset specific parameters
+image_size: [96, 96] # width, height
+datasets:
+  sacson_atomic_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/sacson/turn_left/
+    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  sacson_atomic_adjust_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/sacson/adjust_left/
+    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_adjust_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_adjust_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  sacson_atomic_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/sacson/turn_right/
+    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  sacson_atomic_adjust_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/sacson/adjust_right/
+    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_adjust_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_adjust_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  sacson_atomic_forward:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/sacson/go_forward
+    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_forward/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_forward/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  sacson_atomic_stop:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/sacson/stop
+    train: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_stop/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/sacson_atomic_stop/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  cory_hall_atomic_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/cory_hall/turn_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  cory_hall_atomic_adjust_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/cory_hall/adjust_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_adjust_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_adjust_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  cory_hall_atomic_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/cory_hall/turn_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  cory_hall_atomic_adjust_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/cory_hall/adjust_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_adjust_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_adjust_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  cory_hall_atomic_forward:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/cory_hall/go_forward
+    train: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_forward/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_forward/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  cory_hall_atomic_stop:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/cory_hall/stop
+    train: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_stop/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/cory_hall_atomic_stop/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  seattle_atomic_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/seattle/turn_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  seattle_atomic_adjust_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/seattle/adjust_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_adjust_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_adjust_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  seattle_atomic_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/seattle/turn_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  seattle_atomic_adjust_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/seattle/adjust_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_adjust_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_adjust_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  seattle_atomic_forward:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/seattle/go_forward
+    train: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_forward/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_forward/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  seattle_atomic_stop:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/seattle/stop
+    train: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_stop/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/seattle_atomic_stop/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  tartan_drive_atomic_left: 
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/tartan_drive/turn_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  tartan_drive_atomic_adjust_left: 
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/tartan_drive/adjust_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_adjust_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_adjust_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  tartan_drive_atomic_right: 
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/tartan_drive/turn_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  tartan_drive_atomic_adjust_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/tartan_drive/adjust_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_adjust_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_adjust_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  tartan_drive_atomic_forward: 
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/tartan_drive/go_forward
+    train: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_forward/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_forward/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  tartan_drive_atomic_stop: 
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/tartan_drive/stop
+    train: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_stop/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/tartan_drive_atomic_stop/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  recon_atomic_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/recon/turn_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  recon_atomic_adjust_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/recon/adjust_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_adjust_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_adjust_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  recon_atomic_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/recon/turn_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  recon_atomic_adjust_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/recon/adjust_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_adjust_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_adjust_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  recon_atomic_forward:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/recon/go_forward
+    train: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_forward/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_forward/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  recon_atomic_stop:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/recon/stop
+    train: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_stop/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/recon_atomic_stop/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford_cropped_atomic_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford_cropped/turn_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford_cropped_atomic_adjust_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford_cropped/adjust_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_adjust_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_adjust_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford_cropped_atomic_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford_cropped/turn_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford_cropped_atomic_adjust_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford_cropped/adjust_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_adjust_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_adjust_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford_cropped_atomic_forward:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford_cropped/go_forward
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_forward/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_forward/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford_cropped_atomic_stop:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford_cropped/stop
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_stop/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford_cropped_atomic_stop/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  scand_atomic_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/scand/turn_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  scand_atomic_adjust_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/scand/adjust_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_adjust_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_adjust_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  scand_atomic_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/scand/turn_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  scand_atomic_adjust_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/scand/adjust_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_adjust_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_adjust_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  scand_atomic_forward:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/scand/go_forward
+    train: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_forward/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_forward/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  scand_atomic_stop:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/scand/stop
+    train: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_stop/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/scand_atomic_stop/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford2_atomic_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford2/turn_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford2_atomic_adjust_left:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford2/adjust_left
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_adjust_left/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_adjust_left/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford2_atomic_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford2/turn_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford2_atomic_adjust_right:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford2/adjust_right
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_adjust_right/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_adjust_right/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford2_atomic_forward:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford2/go_forward
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_forward/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_forward/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+  go_stanford2_atomic_stop:
+    data_folder: /home/noam/LLLwL/datasets/atomic_dataset_finer/go_stanford2/stop
+    train: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_stop/train/ # path to train folder with traj_names.txt
+    test: /home/noam/LLLwL/lcbc/data/data_splits/go_stanford2_atomic_stop/test/ # path to test folder with traj_names.txt
+    end_slack: 0 # because many trajectories end in collisions
+    goals_per_obs: 1 # how many goals are sampled per observation
+    negative_mining: False # negative mining from the ViNG paper (Shah et al.)
+    weight: 1.0
+
+
+# logging stuff
+## =0 turns off
+print_log_freq: 100 # in iterations
+image_log_freq: 100 #0 # in iterations
+num_images_log: 8 #0 
+pairwise_test_freq: 0 # in epochs
+eval_fraction: 0.25
+wandb_log_freq: 10 # in iterations
+eval_freq: 1 # in epochs
+save_freq: 5 # in epochs

@@ -208,7 +208,8 @@ class Img2ground(Node):
         # self.goalY = data.linear.y
 
     def img_callback(self, msg):
-        self.cv_image = self.br.imgmsg_to_cv2(msg, "rgb8")  # for images
+        self.cv_image = self.br.imgmsg_to_cv2(msg, "bgr8")  # for images
+        cv2.imwrite("images/img.png", self.cv_image)
         self.img_h, self.img_w, _ = np.shape(self.cv_image)
         self.image_received = True
 

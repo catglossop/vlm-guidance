@@ -11,7 +11,7 @@ from PIL import Image
 
 RESIZE = (128, 128)
 
-class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
+class CfDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
     VERSION = tfds.core.Version('1.0.0')

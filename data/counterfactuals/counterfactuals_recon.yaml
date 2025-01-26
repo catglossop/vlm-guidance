@@ -9,4 +9,4 @@ model_path: /home/noam/LLLwL/lcbc/logs/lcbc/atomic_2024_12_09_19_53_43
 checkpoint: 30
 model_type: lnp_multi_modal
 min_num_cfs: 10000
-counterfactuals_output: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v3/go_stanford_cf
+counterfactuals_output: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v3/recon_cf

@@ -15,3 +15,9 @@ debug/examples/
 data/data_analysis/examples/
 data/data_annotation/lcbc_datasets/
 debug/outputs
+data/data_annotation/cf_dataset/
+data/data_annotation/cf_dataset_v2/
+data/data_annotation/cf_dataset_v3/
+debug/outputs/
+deployment/launch/gold_standard_bags/
+

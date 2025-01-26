@@ -9,7 +9,7 @@ import pickle
 import os
 from PIL import Image
 
-
+RESIZE = (128, 128)
 
 class LCBCDataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
@@ -30,7 +30,7 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
                 'steps': tfds.features.Dataset({
                     'observation': tfds.features.FeaturesDict({
                         'image': tfds.features.Image(
-                            shape=(64, 64, 3),
+                            shape=(RESIZE[0], RESIZE[1], 3),
                             dtype=np.uint8,
                             encoding_format='png',
                             doc='Main camera RGB observation.',
@@ -164,7 +164,7 @@ class LCBCDataset(tfds.core.GeneratorBasedBuilder):
         def _process_image(path, mode='stretch'):
             img = Image.open(path)
             if mode == 'stretch':
-                img = img.resize((64, 64))
+                img = img.resize(RESIZE)
             elif mode == 'crop':
                 img = img.resize((85, 64))
                 
