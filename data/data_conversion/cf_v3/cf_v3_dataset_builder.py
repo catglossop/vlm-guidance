@@ -11,7 +11,7 @@ from PIL import Image
 
 RESIZE = (128, 128)
 
-class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
+class CfV3Dataset(tfds.core.GeneratorBasedBuilder):
     """DatasetBuilder for example dataset."""
 
     VERSION = tfds.core.Version('1.0.0')
@@ -108,8 +108,8 @@ class CfV2Dataset(tfds.core.GeneratorBasedBuilder):
     def _split_generators(self, dl_manager: tfds.download.DownloadManager):
         """Define data splits."""
         return {
-            'train': self._generate_examples(path='/hdd/cf_v2_dataset/train'),
-            'val': self._generate_examples(path='/hdd/cf_v2_dataset/val'),
+            'train': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v3/train'),
+            'val': self._generate_examples(path='/home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v3/val'),
         }
 
     def _generate_examples(self, path) -> Iterator[Tuple[str, Any]]:

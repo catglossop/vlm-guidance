@@ -175,150 +175,7 @@ def get_pos_pixels(
         )
     return pixels
 
-def generate_trajectory(imgs):
-
-    # perform visual odometry to get odom in frame of init robot pose 
-    pose = np.zeros((3, 1))
-
-    # initialize the feature tracker 
-    pass
-
-# Relabelling functions
-def relabel_traj_gpt(images_64, prompt, client, model_name="gpt-4o", actions=None):
-    message_history = []
-    context_no_images = []
-    # if in_context_images_64 is not None: 
-    #     context = [in_context_text]  
-    #     context_no_images = [in_context_text]
-    #     for image_base64 in in_context_images_64:
-    #         context.append({
-    #             "type": "image_url",
-    #             "image_url": {
-    #                 "url": f"data:image/jpeg;base64,{image_base64}",
-    #             },
-    #         })
-    for i, p in enumerate(prompt.keys()):
-        context = []
-        if actions is not None and i == 0:
-            context.append(prompt[p] + (np.array_str(actions)))   
-            context_no_images.append(prompt[p] + (np.array_str(actions)))  
-        else:
-            context.append(prompt[p])   
-            context_no_images.append(prompt[p])
-        if i == 0:
-            for image_base64 in images_64:
-                context.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{image_base64}",
-                    },
-                })
-        message = {"role": "user", "content": context}
-        message_history.append(message)
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=message_history,
-        )
-        assistant_message = response.choices[0].message
-        message_history.append(assistant_message)
-        context_no_images.append(response.choices[0].message.content)
-    label = response.choices[0].message.content
-    return label, context_no_images
-
-def relabel_traj_gpt_hierarchical(images_64, prompt, client, model_name, config, debug=True):
-    message_history = []
-    context_no_images = []
-    image_descriptions = []
-
-    # if in_context_images_64 is not None: 
-    #     context = [in_context_text]  
-    #     context_no_images = [in_context_text]
-    #     for image_base64 in in_context_images_64:
-    #         context.append({
-    #             "type": "image_url",
-    #             "image_url": {
-    #                 "url": f"data:image/jpeg;base64,{image_base64}",
-    #             },
-    #         })
-
-    for i, p in enumerate(prompt.keys()):
-        context = []
-        if debug:
-            print("Prompt key: ", p)
-        if i == 0:  
-            context_no_images.append(prompt[p])
-            message = {"role": "user", "content": prompt[p]}
-            message_history.append(message)
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=message_history,
-            )
-            assistant_message = response.choices[0].message
-            message_history.append(assistant_message)
-            context_no_images.append(response.choices[0].message.content)
-        elif i == 1:
-            for j, image_base64 in enumerate(images_64):
-                context = []
-                context.append(prompt[p])
-                context.append({
-                    "type": "image_url",
-                    "image_url": {
-                        "url": f"data:image/jpeg;base64,{image_base64}",
-                    },
-                })
-                
-                message = {"role": "user", "content": context}
-                message_history.append(message)
-                response = client.chat.completions.create(
-                    model=model_name,
-                    messages=message_history,
-                )
-                image_descriptions.append(response.choices[0].message.content)
-                if debug:
-                    print(f"RESPONSE TO IMAGE DESCRIP {j}: ", response.choices[0].message.content)
-                assistant_message = response.choices[0].message
-                message_history.append(assistant_message)
-                context_no_images.append(response.choices[0].message.content)
-        elif i == 2:
-            str_image_descriptions = "[" + "', '".join(image_descriptions) + "]"
-            context.append(prompt[p] + str_image_descriptions)
-            message = {"role": "user", "content": context}
-            message_history.append(message)
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=message_history,
-            )
-            assistant_message = response.choices[0].message
-            if debug:
-                print("RESPONSE TO FINAL CONTEXT: ", response.choices[0].message.content)
-            message_history.append(assistant_message)
-            context_no_images.append(response.choices[0].message.content)
-    label = response.choices[0].message.content
-    return label, context_no_images
-
-def relabel_traj_gemini(path, images, prompt, client, config):
-    message_history = []
-    context_no_images = []
-    use_video = config["use_video"]
-
-    if use_video: 
-        video_file = images
-    for i, p in enumerate(prompt.keys()):
-        context = []
-        if i == 0:
-            if use_video:
-                context = [video_file, prompt[p]]
-            else:
-                for image in images:
-                    context.append(image)
-                    context_no_images.append(prompt[p])
-                context.append(prompt[p])
-        response = client.generate_content(context)
-        context_no_images.append(response.text)
-    label = response.text
-    return label, context_no_images
-
-def relabel_traj_gemini_hierarchical(images, prompt, client):
+def relabel_traj_gemini_hierarchical(images, prompt, client, config):
     message_history = []
     context_no_images = [] 
     image_descriptions = []
@@ -446,27 +303,6 @@ def main(config):
         os.makedirs(output, exist_ok=True)
     print(f"Outputting dataset to: {output}")
     print(f"Using prompt: {config['prompt']}")
-    # Check if using in-context examples, if so load them (for now, just one in-context example)
-    # in_context_images = None
-    # in_context_text = None
-    # in_context_images_base64 = None
-    # if config.in_context:
-    #     print(f"Using in context: {config.in_context}")
-    #     with open(config.in_context, "r") as in_context:
-    #         try: 
-    #             in_context_example = yaml.safe_load(config.in_context, "r")
-    #         except:
-    #             raise ValueError("Invalid in context file")
-    #     in_context_images = [Image.open(in_context_example["path"][i]) for i in range(len(in_context_example["path"]))]
-    #     in_context_text = in_context_example["text"]
-        
-    #     if model == "gpt":
-    #         # convert images to base64
-    #         in_context_images_base64 = [pil_to_base64(img) for img in in_context_images]
-    # in_context_images = None
-    # in_context_text = None
-    # in_context_images_base64 = None
-    # Get paths 
     # select subset of paths based on location 
     if dataset.split("/")[-1] == "sacson":
         bww1_paths = glob.glob(dataset + "/*bww1*")
@@ -567,17 +403,12 @@ def label_trajectories(thread_num, paths, config, tqdm_func=None, global_tqdm=No
             end = min(i + traj_len, total_traj_len)
 
             print(f"Processing chunk {chunk_idx} with start {start} and end {end} of length {end - start}")
-
             traj_output_dir = os.path.join(output, f"{path.split('/')[-1]}_chunk_{chunk_idx}_start_{start}_end_{end}")
 
             # Get curr traj data
             curr_traj_data = {}
             for key in traj_data.keys():
                 curr_traj_data[key] = traj_data[key][start:end]
-            
-            if config["use_actions"]: 
-                actions = np.hstack((curr_traj_data["position"], curr_traj_data["yaw"].reshape(-1, 1)))
-                actions = actions - actions[0, :]
             
             # Get and annotate images
             if annotation_type == "drawn":
@@ -611,7 +442,6 @@ def label_trajectories(thread_num, paths, config, tqdm_func=None, global_tqdm=No
             # Convert images to base64 if using GPT-4
             if model == "gpt" or (model == "gemini" and "hierarchical" in config["prompt"]) and imgs is not None:
                 imgs_base64 = [pil_to_base64(img) for img in imgs]
-
             label = None
             context = None
             if model == "gpt":
@@ -646,9 +476,7 @@ def label_trajectories(thread_num, paths, config, tqdm_func=None, global_tqdm=No
                     while tries < max_tries:
                         try:
                             label, context = relabel_traj_gemini_hierarchical(imgs_base64, prompt, client, config)
-                            print(label)
                             instruction_json = json.loads(label.lstrip("```json").rstrip("\n").rstrip("```").strip("\n"))
-                            breakpoint()
                             break
                         except:
                             tries += 1
@@ -708,6 +536,11 @@ def label_trajectories(thread_num, paths, config, tqdm_func=None, global_tqdm=No
             
             chunk_idx += 1
             i += traj_len
+            print("Step is ", i)
+            print("Total traj len is ", total_traj_len)
+            if i > total_traj_len:
+                print("Finished processing path")
+                break
 
             # Update state
             current_state = {"start": start, "chunk_idx": chunk_idx}

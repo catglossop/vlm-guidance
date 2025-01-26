@@ -1,0 +1,15 @@
+{"type": "json_schema",
+    "json_schema": {
+        "name": "email_schema",
+        "schema": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "description": "The email address that appears in the input",
+                    "type": "string"
+                },
+                "additionalProperties": false
+            }
+        }
+    }
+}

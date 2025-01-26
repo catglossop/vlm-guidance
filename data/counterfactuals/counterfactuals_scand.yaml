@@ -8,5 +8,5 @@ model_config: /home/noam/LLLwL/lcbc/config/atomic_finer.yaml
 model_path: /home/noam/LLLwL/lcbc/logs/lcbc/atomic_2024_12_09_19_53_43
 checkpoint: 30
 model_type: lnp_multi_modal
-min_num_cfs: 5000
-counterfactuals_output: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v2/scand_cf
+min_num_cfs: 10000
+counterfactuals_output: /home/noam/LLLwL/lcbc/data/data_annotation/cf_dataset_v3/scand_cf
