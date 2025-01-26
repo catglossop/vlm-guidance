@@ -125,4 +125,32 @@ lelan_mm_pred_20_ckpt_100:
   config_path: "../config/lelan_mm_pred_20.yaml"
   ckpt_path: "model_weights/lelan_mm_pred_20_ckpt_100.pth"
 
+atomic_transformer:
+  config_path: "../config/atomic_transformer.yaml"
+  ckpt_path: "model_weights/atomic/transformer_lang_interleaved.pth"
+
+curr_obs_lang_cat:
+  config_path: "../config/atomic_curr_obs_lang_cat.yaml"
+  ckpt_path: "model_weights/atomic/curr_obs_lang_cat.pth"
+
+categorical_dense:
+  config_path: "../config/atomic_categorical_dense.yaml"
+  ckpt_path: "model_weights/atomic/categorical_dense.pth"
+
+transformer_varied_lang:
+  config_path: "../config/atomic_transformer_varied_lang.yaml"
+  ckpt_path: "model_weights/atomic/transformer_varied_lang.pth"
+
+transformer_full:
+  config_path: "../config/transformer_full.yaml"
+  ckpt_path: "model_weights/atomic/transformer_full.pth"
+
+atomic_explore_token:
+  config_path: "../config/atomic_explore_token.yaml"
+  ckpt_path: "model_weights/atomic/explore_token.pth"
+
+atomic_explore_v2:
+  config_path: "../config/atomic_explore_token.yaml"
+  ckpt_path: "model_weights/atomic/atomic_w_explore.pth"
+
 # add your own model configs here after saving the *.pth file to ../model_weight
