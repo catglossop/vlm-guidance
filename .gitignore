@@ -20,4 +20,5 @@ data/data_annotation/cf_dataset_v2/
 data/data_annotation/cf_dataset_v3/
 debug/outputs/
 deployment/launch/gold_standard_bags/
+baselines/navila/navila_atomic_model.pth
 
