@@ -384,13 +384,6 @@ if __name__ == "__main__":
         help=f"Number of actions sampled from the exploration model (default: 8)",
     )
     parser.add_argument(
-        "--model-type",
-        "-m", 
-        default="rft", 
-        type=str,
-        help="Model type to use",
-    )
-    parser.add_argument(
         "--prompt",
         "-p",
         default="Go to the kitchen",
