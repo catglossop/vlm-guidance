@@ -340,28 +340,24 @@ class NaVILAPolicy(Node):
             print("Compare time: ", time.time() - start_viz_time)
 
         # Normalize and publish waypoint
-        if self.naction is not None:
-            if self.model_params["normalize"]:
-                self.chosen_waypoint[:2] *= (self.MAX_V / self.RATE)  
-            print("Chosen waypoint shape: ", self.chosen_waypoint.shape)
-            print("Chosen waypoint: ", self.chosen_waypoint)
-            self.execute = 0
-            while self.execute < self.args.waypoint:
-                self.waypoint = self.naction[self.execute, :]
-                self.waypoint_msg.data = self.waypoint.tolist()
-                self.waypoint_pub.publish(self.waypoint_msg)
-                time.sleep(self.timer_period)
-                self.execute += 1
-            time.sleep(self.timer_period)
-            self.blank_msg = Float32MultiArray()
-            self.blank_msg.data = np.zeros(4, dtype=np.float32).tolist()
-            self.waypoint_pub.publish(self.blank_msg)
-        self.naction = None
-        print("Elapsed time: ", time.time() - start)
+        if self.model_params["normalize"]:
+            self.chosen_waypoint[:2] *= (self.MAX_V / self.RATE)  
+        print("Chosen waypoint shape: ", self.chosen_waypoint.shape)
+        print("Chosen waypoint: ", self.chosen_waypoint)
+        self.waypoint_msg.data = self.chosen_waypoint.tolist()
+        self.execute = 0
+        # while self.execute < self.args.waypoint:
+        self.waypoint_pub.publish(self.waypoint_msg)
+        # self.execute += 1
+        # time.sleep(self.timer_period)
+        # self.blank_msg = Float32MultiArray()
+        # self.blank_msg.data = np.zeros(4, dtype=np.float32).tolist()
+        # self.waypoint_pub.publish(self.blank_msg)
+        print("Elapsed time: ", time.time() - start )
 
 def main(args):
     rclpy.init()
-    nav_policy = NaVILAPolicy(args)
+    nav_policy = NavigateLocal(args)
 
     rclpy.spin(nav_policy)
     nav_policy.destroy_node()
