@@ -44,9 +44,6 @@ def main(config):
             config["gpu_ids"] = [0]
         elif type(config["gpu_ids"]) == int:
             config["gpu_ids"] = [config["gpu_ids"]]
-        # os.environ["CUDA_VISIBLE_DEVICES"] = ",".join(
-        #     [str(x) for x in range(8)]
-        # )
         print("Using cuda devices:", os.environ["CUDA_VISIBLE_DEVICES"])
     else:
         print("Using cpu")
@@ -87,7 +84,6 @@ def main(config):
         weights.append(data_config["weight"])
     total_weight = sum(weights)
     train_dataset_weights = [w / total_weight for w in weights]
-    print(len(train_dataset_weights))
 
     for dataset_idx, dataset_name in enumerate(config["datasets"]):
         data_config = config["datasets"][dataset_name]

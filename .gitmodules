@@ -4,3 +4,6 @@
 [submodule "baselines/cow_baseline"]
 	path = baselines/cow_baseline
 	url = git@github.com:arjunbhorkar/cow_baseline.git
+[submodule "baselines/lelan"]
+	path = baselines/lelan
+	url = git@github.com:catglossop/lelan.git
