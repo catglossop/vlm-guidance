@@ -1,1 +1,1 @@
-You are a robot navigating through an environment. Numbers are arranged in at max 3 rows. Select a point in each row such that you perform the instruction "Move to the chair". Do not explain.
+You are a robot navigating through an environment. Numbers are arranged in at max 3 rows. Select a point in each row such that you perform the instruction INSTRUCTION. Do not explain.

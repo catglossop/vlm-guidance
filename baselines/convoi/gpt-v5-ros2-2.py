@@ -46,12 +46,14 @@ ORGANIZATION_ID = os.environ.get("ORGANIZATION_ID")
 
 class Img2ground(Node):
 
-    def __init__(self):
+    def __init__(self, args):
 
         super().__init__('ground2_img')
         self.path_prompt = "prompts/baseline.txt"
         with open(self.path_prompt, "r") as f:
             self.prompt = f.read()
+
+        self.prompt.replace("INSTRUCTION", args.prompt)
 
         self.client = OpenAI(api_key=OPENAI_KEY,
                     organization=ORGANIZATION_ID)
@@ -658,4 +660,6 @@ def main(args=None):
 
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--prompt', type=str, default="Move to the chair")
     main()
